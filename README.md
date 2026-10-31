@@ -6,10 +6,35 @@ A browser-based viewer and editor for Hangul word processor documents (`.hwp`, `
 
 > 아직 개발 중이다. 문서마다 한글과 다르게 보이는 곳이 있을 수 있다.
 
-## 바로 써 보기
+## 보기 전용과 편집기
 
-- 편집기: https://ede.kr/hwp/editor
-- 보기 전용: https://ede.kr/hwp/viewer
+앱은 두 화면으로 열린다.
+
+| 화면 | 주소 | 하는 일 |
+|---|---|---|
+| 편집기 | https://ede.kr/hwp/editor | 문서를 열고 고치고, `.hwp`·`.hwpx` 로 저장한다 |
+| 보기 전용 | https://ede.kr/hwp/viewer | 문서를 읽기만 한다. 고치는 메뉴가 없고, 편집기로 넘어가는 단추가 있다 |
+
+직접 빌드해 띄운 앱도 같은 `/editor`, `/viewer` 주소를 쓴다.
+
+### 주소로 문서 열기
+
+`?file=` 에 문서 주소를 주면 그 문서를 바로 연다. 다른 곳의 문서는 `https` 주소여야 하고, 그 서버가 `Access-Control-Allow-Origin` 헤더를 보내야 한다.
+
+```
+https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp
+```
+
+### 다른 페이지에 넣기
+
+보기 전용 화면을 `iframe` 으로 넣으면 페이지 안에서 문서를 보여 줄 수 있다.
+
+```html
+<iframe src="https://ede.kr/hwp/viewer?file=https://example.com/공문.hwpx"
+        width="100%" height="800" style="border: 0"></iframe>
+```
+
+화면 없이 엔진만 불러 문서를 그리거나 글자를 뽑으려면 [ClassingHWP/core 의 WASM 사용 예제](https://github.com/ClassingHWP/core#wasm-사용-예제) 를 본다.
 
 ## 받기
 
@@ -48,34 +73,6 @@ npm run build    # build/web 에 결과물
 ```
 
 경로는 `paths.mjs` 가 정한다.
-
-## WASM 사용 예제
-
-[examples/wasm/index.html](examples/wasm/index.html) 은 웹 앱 없이 엔진만 불러 문서를 열고, 쪽을 그림으로 그리고, 본문 글자를 뽑는 가장 작은 예제다. 빌드하지 않고 미리 빌드한 엔진으로 돌릴 수 있다.
-
-1. [core 릴리스](https://github.com/ClassingHWP/core/releases/latest) 에서 `classinghwp-wasm-<버전>.zip` 을 받아 `examples/wasm/` 에 푼다.
-2. 그 폴더를 정적 서버로 띄우고 브라우저로 연다.
-
-```bash
-npx serve examples/wasm
-```
-
-엔진을 부르는 순서는 이렇다.
-
-```js
-import createNotingModule from "./noting-single.mjs";
-
-const noting = await createNotingModule({ canvas: new OffscreenCanvas(64, 64) });
-noting.setFontCatalog(JSON.stringify(catalog));      // 글꼴 서버의 index.json
-const info = noting.openDocument(bytes);              // info.faces: 문서가 쓰는 글꼴
-noting.decodeFont([face], fontBytes);                 // 그 글꼴들을 받아 넣는다
-const plan = JSON.parse(noting.planDocument(true));   // 쪽 나누기. plan.count 쪽
-noting.warmGlyphs(page, percent);                     // 그 배율의 글자 윤곽 준비
-const frame = noting.renderPagePixels(page, 1100);    // RGBA 픽셀 { width, height, pixels }
-const text = noting.extractText(bytes);               // 본문 글자
-```
-
-`noting-single` 은 단일 스레드 판이라 아무 서버에서나 돈다. 여러 스레드 판(`noting.mjs`)은 페이지가 Cross-Origin-Isolation 헤더(`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp` 또는 `credentialless`)를 보내야 한다.
 
 ## 글꼴
 
