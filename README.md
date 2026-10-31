@@ -1,0 +1,101 @@
+# ClassingHWP Web
+
+한글 문서(`.hwp`, `.hwpx`)를 브라우저에서 보고 고치는 웹 앱이다. 문서 엔진은 [ClassingHWP/core](https://github.com/ClassingHWP/core) 를 서브모듈 `core/` 로 넣어 WebAssembly 로 빌드해 쓴다.
+
+A browser-based viewer and editor for Hangul word processor documents (`.hwp`, `.hwpx`). The document engine comes from [ClassingHWP/core](https://github.com/ClassingHWP/core) as the `core/` submodule, compiled to WebAssembly. Source-available under Apache-2.0 with the Commons Clause.
+
+> 아직 개발 중이다. 문서마다 한글과 다르게 보이는 곳이 있을 수 있다.
+
+## 바로 써 보기
+
+- 편집기: https://ede.kr/hwp/editor
+- 보기 전용: https://ede.kr/hwp/viewer
+
+## 받기
+
+```bash
+git clone --recursive https://github.com/ClassingHWP/web.git
+```
+
+이미 받았다면 서브모듈을 따로 받는다.
+
+```bash
+git submodule update --init
+```
+
+## 빌드
+
+### 1. 문서 엔진 (WebAssembly)
+
+`core/` 의 [README](https://github.com/ClassingHWP/core#readme) 순서대로 Skia 를 준비하고 WASM 을 빌드한다. 결과물은 `core/build/wasm-release/bindings/wasm/` 에 생긴다.
+
+```bash
+cd core
+source <emsdk>/emsdk_env.sh
+cmake --preset wasm-release
+cmake --build build/wasm-release
+cd ..
+```
+
+### 2. 웹 앱
+
+Node.js 22 가 필요하다.
+
+```bash
+npm install
+npm run dev      # 개발 서버 (http://localhost:5173)
+npm run build    # build/web 에 결과물
+```
+
+경로는 `paths.mjs` 가 정한다.
+
+## WASM 사용 예제
+
+[examples/wasm/index.html](examples/wasm/index.html) 은 웹 앱 없이 엔진만 불러 문서를 열고, 쪽을 그림으로 그리고, 본문 글자를 뽑는 가장 작은 예제다. 빌드하지 않고 미리 빌드한 엔진으로 돌릴 수 있다.
+
+1. [core 릴리스](https://github.com/ClassingHWP/core/releases/latest) 에서 `classinghwp-wasm-<버전>.zip` 을 받아 `examples/wasm/` 에 푼다.
+2. 그 폴더를 정적 서버로 띄우고 브라우저로 연다.
+
+```bash
+npx serve examples/wasm
+```
+
+엔진을 부르는 순서는 이렇다.
+
+```js
+import createNotingModule from "./noting-single.mjs";
+
+const noting = await createNotingModule({ canvas: new OffscreenCanvas(64, 64) });
+noting.setFontCatalog(JSON.stringify(catalog));      // 글꼴 서버의 index.json
+const info = noting.openDocument(bytes);              // info.faces: 문서가 쓰는 글꼴
+noting.decodeFont([face], fontBytes);                 // 그 글꼴들을 받아 넣는다
+const plan = JSON.parse(noting.planDocument(true));   // 쪽 나누기. plan.count 쪽
+noting.warmGlyphs(page, percent);                     // 그 배율의 글자 윤곽 준비
+const frame = noting.renderPagePixels(page, 1100);    // RGBA 픽셀 { width, height, pixels }
+const text = noting.extractText(bytes);               // 본문 글자
+```
+
+`noting-single` 은 단일 스레드 판이라 아무 서버에서나 돈다. 여러 스레드 판(`noting.mjs`)은 페이지가 Cross-Origin-Isolation 헤더(`Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Embedder-Policy: require-corp` 또는 `credentialless`)를 보내야 한다.
+
+## 글꼴
+
+저장소에는 글꼴이 없다. 앱은 `.env` 의 `VITE_FONT_BASE` 가 가리키는 글꼴 서버(`https://ede.kr/hwp/fonts/`)에서 글꼴 목록과 파일, 라이선스 글을 받는다. 글꼴마다의 라이선스와 출처는 앱의 **파일 → ClassingHWP 정보 → 글꼴** 에 있다.
+
+## 라이선스
+
+[Apache License 2.0](LICENSE) 에 **Commons Clause** 조건을 더한 소스 공개(source-available) 라이선스다. OSI 오픈 소스가 아니다.
+
+- 개인 사용, 회사·기관 내부 사용, 수정본의 무료 재배포는 자유롭다.
+- 판매, 유료·광고 서비스, 유료 제품 번들은 따로 협의해야 한다.
+
+한국어 요약은 [LICENSE.ko.md](LICENSE.ko.md), 함께 들어간 라이브러리와 글꼴은 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 를 본다.
+
+## 알림
+
+본 제품은 한글과컴퓨터의 글 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+
+한글과 한컴오피스는 한글과컴퓨터의 상표다. 이 프로그램은 한글과컴퓨터가 만들거나 보증하지 않는다.
+
+## 문의
+
+shimverz@naver.com

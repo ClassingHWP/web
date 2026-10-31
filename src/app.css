@@ -1,0 +1,318 @@
+@import "tailwindcss";
+@import "../public/fonts/noto-sans-kr/noto-sans-kr.css";
+
+    @theme inline {
+      --color-background: var(--background);
+      --color-foreground: var(--foreground);
+      --color-popover: var(--popover);
+      --color-popover-foreground: var(--popover-foreground);
+      --color-muted: var(--muted);
+      --color-muted-foreground: var(--muted-foreground);
+      --color-accent: var(--accent);
+      --color-accent-foreground: var(--accent-foreground);
+      --color-border: var(--border);
+      --color-input: var(--input);
+      --color-ring: var(--ring);
+      --color-primary: var(--primary);
+      --color-primary-foreground: var(--primary-foreground);
+      --color-secondary: var(--secondary);
+      --color-secondary-foreground: var(--secondary-foreground);
+      --color-destructive: var(--destructive);
+    }
+
+    /* 색과 모양은 Claude Design 「한컴 스타일 A 시안」을 따른다. 흰 바탕, 검정 강조, 연회색 테두리. */
+    :root {
+      --background: #ffffff;
+      --foreground: #0a0a0a;
+      --popover: #ffffff;
+      --popover-foreground: #0a0a0a;
+      --muted: #f5f5f5;
+      --muted-foreground: #737373;
+      --accent: #f5f5f5;
+      --accent-foreground: #0a0a0a;
+      --border: #e5e5e5;
+      --input: #d4d4d4;
+      --primary: #171717;
+      --primary-foreground: #ffffff;
+      --secondary: #f5f5f5;
+      --secondary-foreground: #0a0a0a;
+      --destructive: #c42b1c;
+      --ring: #a3a3a3;
+      --radius: 0.5rem;
+      color-scheme: light;
+    }
+
+    /* 시안의 단추 모양. ghost 는 눌러야 보이고, outline 은 연회색 테두리, tg·part 는 켜면 검정이다. */
+    /* --ui-h 는 서식 도구 칸, --ui-sh 는 상태 줄 칸 높이다. 손가락으로 누르는 좁은 화면은 44px,
+       가로로 넓은 컴퓨터 화면은 문서가 많이 보이게 글자와 칸을 낮춘다. */
+    .ui-chrome { font-size: 18px; color: #0a0a0a; --ui-h: 44px; --ui-sh: 44px; }
+    @media (min-width: 64rem) {
+      .ui-chrome { font-size: 15px; --ui-h: 32px; --ui-sh: 26px; }
+      .format-compact .ui-chrome { font-size: 13.5px; --ui-h: 27px; }
+    }
+    .ui-ghost, .ui-outline, .ui-tg, .ui-part, .ui-rb { cursor: pointer; transition: background-color .12s; }
+    .ui-ghost { background: transparent; }
+    .ui-ghost:hover:not(:disabled) { background: #f5f5f5; }
+    .ui-outline { background: #ffffff; box-shadow: inset 0 0 0 1px #d4d4d4; }
+    .ui-outline:hover:not(:disabled) { background: #f5f5f5; }
+    .ui-tg, .ui-part { background: transparent; }
+    .ui-tg:hover:not(:disabled), .ui-part:hover:not(:disabled) { background: #f5f5f5; }
+    .ui-tg[aria-pressed="true"], .ui-part[aria-pressed="true"] { background: #171717; color: #ffffff; }
+    .ui-rb { background: transparent; }
+    .ui-rb:hover:not(:disabled) { background: #f5f5f5; }
+    .ui-rb.on { background: #f5f5f5; box-shadow: inset 0 0 0 1px #d4d4d4; }
+    .ui-rb:disabled { color: #a3a3a3; cursor: default; }
+    .ui-box { background: #ffffff; box-shadow: inset 0 0 0 1px #d4d4d4; }
+    .ui-box:focus-within { box-shadow: inset 0 0 0 1px #171717, 0 0 0 3px rgba(163, 163, 163, 0.5); }
+    .ui-pop { background: #ffffff; box-shadow: 0 0 0 1px rgba(10, 10, 10, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1); }
+    .ui-primary { background: #171717; color: #ffffff; font-weight: 500; cursor: pointer; }
+    .ui-primary:hover:not(:disabled) { background: #262626; }
+    .ui-chrome svg { flex: none; }
+    .ui-ghost:focus-visible, .ui-outline:focus-visible, .ui-tg:focus-visible, .ui-part:focus-visible, .ui-rb:focus-visible, .ui-primary:focus-visible { outline: 3px solid rgba(163, 163, 163, 0.5); outline-offset: 0; }
+    .ui-radio { appearance: none; -webkit-appearance: none; margin: 0; width: 20px; height: 20px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px #a3a3a3; background: #ffffff; cursor: pointer; }
+    .ui-radio:checked { box-shadow: inset 0 0 0 1.5px #171717, inset 0 0 0 5px #ffffff; background: #171717; }
+    .ui-radio:disabled { cursor: default; opacity: 0.5; }
+
+    @font-face {
+      font-family: "HangulEm";
+      src: local("함초롬바탕"), local("HCR Batang");
+      ascent-override: 85%;
+      descent-override: 15%;
+      line-gap-override: 0%;
+    }
+    .toolbar-ui,
+    [data-slot="menubar-content"],
+    [data-slot="select-content"] {
+      font-family: "Noto Sans KR", "Segoe UI", "Malgun Gothic", sans-serif;
+    }
+    html, body, #root { height: 100%; touch-action: none; }
+    #root {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    body {
+      font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+      margin: 0;
+      /* 휴대폰·패드 브라우저의 아래 탐색 막대에 가리지 않게, 지금 보이는 높이(dvh)까지만 쓴다. */
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      color: #0a0a0a;
+    }
+    .toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; padding: 0.35rem 0.6rem; background: #f3f3f3; border-bottom: 1px solid #e5e5e5; font-size: 13px; }
+    .toolbar button,
+    .toolbar select,
+    .toolbar input[type="number"] {
+      font: inherit;
+      color: #1a1a1a;
+      background: #fff;
+      border: 1px solid #c8c8c8;
+      border-radius: 4px;
+      height: 26px;
+      padding: 0 8px;
+    }
+    .toolbar button:hover:not(:disabled),
+    .toolbar select:hover:not(:disabled) { background: #f6f6f6; }
+    .panes {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+    section { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .toolbar button:disabled,
+    .toolbar select:disabled { opacity: 0.45; }
+    .preview-scroll {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: #e4e4e7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+    html.zoomed .preview-scroll {
+      overflow: auto;
+      align-items: flex-start;
+      justify-content: flex-start;
+    }
+    html.view-mode .preview-scroll {
+      overflow: hidden;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+    html.view-mode .page-stack {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+    }
+    .view-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      display: block;
+    }
+    .view-caret {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      z-index: 4;
+      pointer-events: none;
+      animation: view-caret-blink 1.06s step-end infinite;
+    }
+    @keyframes view-caret-blink {
+      50% { opacity: 0; }
+    }
+    .view-scroller {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      overflow: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+      touch-action: none;
+    }
+    .view-scroller::-webkit-scrollbar {
+      display: none;
+    }
+    .view-spacer { pointer-events: none; }
+    html.zoomed .page-stack {
+      max-width: none;
+      max-height: none;
+    }
+    .sheet {
+      position: relative;
+      height: 100%;
+      width: auto;
+      max-width: 100%;
+      max-height: 100%;
+      background: #fff;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+      overflow: hidden;
+      display: block;
+    }
+    .sheet .obj, .sheet .line, .sheet .body, .sheet .para, .sheet .column, .sheet .cell {
+      position: absolute;
+      box-sizing: border-box;
+    }
+    .sheet .body { z-index: 1; }
+    .sheet .para {
+      margin: 0;
+      z-index: 1;
+    }
+    .sheet .line span {
+      white-space: pre;
+    }
+    .sheet .line > span {
+      overflow: visible;
+    }
+    .sheet .obj {
+      overflow: hidden;
+      color: #222;
+    }
+    .sheet .obj.picture {
+      background: #e7edf2;
+      overflow: hidden;
+    }
+    .sheet .obj.equation {
+      box-sizing: border-box;
+      border: 1px solid #c45c26;
+      background: transparent;
+    }
+    .sheet .line > .obj[data-char="1"] {
+      position: relative;
+      display: inline-block;
+      vertical-align: top;
+    }
+    .sheet .obj.picture img {
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      display: block;
+    }
+    .sheet .obj.behind {
+      z-index: 0;
+      border: none;
+      background: transparent;
+    }
+    .sheet .obj .inside {
+      position: relative;
+      z-index: 1;
+      padding: 0.15em 0.3em;
+      white-space: pre-wrap;
+    }
+    .sheet .obj .nested {
+      z-index: 3;
+      background: rgba(255, 255, 248, 0.96);
+    }
+    .sheet .cell {
+      overflow: hidden;
+    }
+    .sheet .as-char {
+      display: inline-block;
+      border: 1px solid #444;
+      vertical-align: top;
+      margin: 0.05em 0.15em;
+      padding: 0.05em 0.2em;
+      background: #fff;
+    }
+    .sheet .inner-line, .sheet .line {
+      position: absolute;
+      white-space: pre;
+      overflow: visible;
+      line-height: 1;
+      color: #111;
+      font-family: "HangulEm", "함초롬바탕", "HCR Batang", sans-serif;
+    }
+    .sheet .inner-line { z-index: 2; }
+    .sheet .line { z-index: 1; }
+    .page-tiles {
+      position: absolute;
+      inset: 0;
+    }
+    .page-view {
+      position: absolute;
+      display: block;
+      image-rendering: pixelated;
+    }
+    .page-view.exact {
+      image-rendering: auto;
+    }
+    .empty-preview { color: #555; padding: 1rem; line-height: 1.4; }
+    .page-stack {
+      position: relative;
+      flex: 0 0 auto;
+      height: 100%;
+      width: 100%;
+      line-height: 0;
+    }
+    #sheetSlot {
+      position: relative;
+      z-index: 2;
+      height: 100%;
+    }
+
+    /* 토스트: 아래에서 0.22초 동안 올라오고, 0.18초 동안 아래로 내려간다. 쌓인 자리는 0.3초 동안 옮긴다. */
+    @keyframes toast-in { from { transform: translateY(140%); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes toast-out { from { transform: none; opacity: 1; } to { transform: translateY(140%); opacity: 0; } }
+    .toast-in { animation: toast-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
+    .toast-out { animation: toast-out 180ms ease-in both; }
+    .toast-slot { transition: transform 300ms cubic-bezier(.2, .8, .2, 1); }
+    @media (prefers-reduced-motion: reduce) {
+      .toast-in, .toast-out { animation-duration: 1ms; }
+      .toast-slot { transition: none; }
+    }

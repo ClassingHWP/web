@@ -1,0 +1,13 @@
+node_modules
+dist
+build/
+.preview-cert
+
+# 글꼴 파일은 올리지 않는다.
+*.ttf
+*.otf
+*.ttc
+*.otc
+*.woff
+*.woff2
+*.eot

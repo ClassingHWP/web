@@ -1,0 +1,5 @@
+Noto Sans KR
+Copyright 2014 Google Inc. All Rights Reserved.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is in OFL.txt.
