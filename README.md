@@ -13,9 +13,9 @@ A browser-based viewer and editor for Hangul word processor documents (`.hwp`, `
 | 화면 | 주소 | 하는 일 |
 |---|---|---|
 | 편집기 | https://ede.kr/hwp/editor | 문서를 열고 고치고, `.hwp`·`.hwpx` 로 저장한다 |
-| 보기 전용 | https://ede.kr/hwp/viewer | 문서를 읽기만 한다. 고치는 메뉴가 없고, 편집기로 넘어가는 단추가 있다 |
+| 보기 전용 | [https://ede.kr/hwp/viewer](https://ede.kr/hwp/viewer?file=/hwp/samples/math-curriculum.hwp) | 문서를 읽기만 한다. 고치는 메뉴가 없고, 편집기로 넘어가는 단추가 있다 |
 
-직접 빌드해 띄운 앱도 같은 `/editor`, `/viewer` 주소를 쓴다.
+보기 전용 링크는 교육부 고시 「수학과 교육과정」(제2022-33호 [별책 8])을 열어 보여 준다. 직접 빌드해 띄운 앱도 같은 `/editor`, `/viewer` 주소를 쓴다.
 
 ### 주소로 문서 열기
 
