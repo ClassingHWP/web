@@ -51,7 +51,7 @@ async function installSandboxWorkers() {
   function rewrite(text, href) {
     const selfName = new URL(href).pathname.split("/").pop();
     let next = text.replace(
-      /new URL\(\s*\/\*\s*@vite-ignore\s*\*\/\s*`(\/assets\/noting-[^`]+\.js)`,``\+import\.meta\.url\)/g,
+      /new URL\(\s*\/\*\s*@vite-ignore\s*\*\/\s*`(\/assets\/chwp-[^`]+\.js)`,``\+import\.meta\.url\)/g,
       (full, assetPath) => {
         const name = assetPath.split("/").pop();
         if (name === selfName) return "new URL(import.meta.url)";

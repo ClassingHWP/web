@@ -3,73 +3,43 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { TriangleAlert, X } from "lucide-react";
 import { FontField } from "@/FontField";
 
-// 막힌 글꼴마다 지난번에 고른 글꼴. 이 브라우저에만 남는다. 못 읽으면 기본 짝을 쓴다.
-const choiceKey = "noting.fontSwapChoices";
-
-function readChoices() {
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(choiceKey) || "{}");
-    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-  } catch {
-    return {};
-  }
-}
-
-// 기본 짝과 다르게 고른 것만 남긴다. 기본 짝으로 되돌리면 남긴 것을 지운다.
-function saveChoices(swaps, chosen) {
-  try {
-    const saved = readChoices();
-    for (const swap of swaps) {
-      const pick = chosen[swap.from];
-      if (pick && pick !== swap.to) saved[swap.from] = pick;
-      else delete saved[swap.from];
-    }
-    window.localStorage.setItem(choiceKey, JSON.stringify(saved));
-  } catch {
-    // 저장하지 못해도 이번 바꾸기는 그대로 한다.
-  }
-}
-
 // 라이선스로 막힌 글꼴이 있는 문서를 처음 고치려 할 때 뜬다.
-// 코어가 편집을 받지 않고 needsFontSwap 을 돌려주면 preview.js 가 noting-font-swap-ask 로 바꿀 목록을 보낸다.
-// 줄마다 바꿀 글꼴을 고를 수 있다. 처음 값은 지난번에 고른 글꼴, 없으면 코어가 정한 짝이다.
+// 코어가 편집을 받지 않고 needsFontSwap 을 돌려주면 preview.js 가 chwp-font-swap-ask 로 바꿀 목록을 보낸다.
+// 줄마다 바꿀 글꼴을 고를 수 있다. 처음 값(지난번에 고른 글꼴 또는 기본 짝)은 코어가 정한다.
 export function FontSwapDialog() {
   const [swaps, setSwaps] = useState(null);
   const [chosen, setChosen] = useState({});
   const applyRef = useRef(null);
-  const [fonts, setFonts] = useState(() => (Array.isArray(window.__notingFontList) ? window.__notingFontList : []));
+  const [fonts, setFonts] = useState(() => (Array.isArray(window.__chwpFontList) ? window.__chwpFontList : []));
 
   useEffect(() => {
     const onList = (event) => {
       if (Array.isArray(event.detail)) setFonts(event.detail);
     };
-    window.addEventListener("noting-font-list", onList);
-    return () => window.removeEventListener("noting-font-list", onList);
+    window.addEventListener("chwp-font-list", onList);
+    return () => window.removeEventListener("chwp-font-list", onList);
   }, []);
 
   useEffect(() => {
     const onAsk = (event) => {
       const list = Array.isArray(event.detail?.swaps) ? event.detail.swaps : [];
       if (!list.length) return;
-      const pickable = new Set(Array.isArray(window.__notingFontList) ? window.__notingFontList : []);
-      const saved = readChoices();
       const start = {};
-      for (const swap of list) start[swap.from] = pickable.has(saved[swap.from]) ? saved[swap.from] : swap.to;
+      for (const swap of list) start[swap.from] = swap.to;
       setChosen(start);
       setSwaps(list);
     };
-    window.addEventListener("noting-font-swap-ask", onAsk);
-    return () => window.removeEventListener("noting-font-swap-ask", onAsk);
+    window.addEventListener("chwp-font-swap-ask", onAsk);
+    return () => window.removeEventListener("chwp-font-swap-ask", onAsk);
   }, []);
 
   function answer(apply) {
     setSwaps(null);
     if (!apply) {
-      window.dispatchEvent(new Event("noting-font-swap-cancel"));
+      window.dispatchEvent(new Event("chwp-font-swap-cancel"));
       return;
     }
-    saveChoices(swaps || [], chosen);
-    window.dispatchEvent(new CustomEvent("noting-font-swap-apply", { detail: { chosen } }));
+    window.dispatchEvent(new CustomEvent("chwp-font-swap-apply", { detail: { chosen } }));
   }
 
   // 글꼴 목록은 body 에 뜨므로 모달로 두면 누를 수 없다. 모달을 끄고 덮개는 직접 깐다.
@@ -125,7 +95,7 @@ export function FontSwapDialog() {
               취소
             </button>
             <button ref={applyRef} type="button" className="ui-primary h-11 rounded-lg px-[18px]" onClick={() => answer(true)}>
-              바꾸고 편집
+              변경 후 적용
             </button>
           </div>
         </DialogPrimitive.Content>

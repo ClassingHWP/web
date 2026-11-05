@@ -8,13 +8,13 @@ import { useWide } from "./ui-actions.js";
 
 // ClassingHWP 정보 창. 정보 · 오픈 소스 · 글꼴 세 탭이다.
 // 오픈 소스는 open-source.js 의 고정 목록이고, 글꼴은 웹 빌드가 만든 fonts/licenses.json 을 읽는다.
-// 파일 메뉴의 「ClassingHWP 정보」가 noting-open-about 이벤트로 연다.
+// 파일 메뉴의 「ClassingHWP 정보」가 chwp-open-about 이벤트로 연다.
 
 const tabs = ["정보", "오픈 소스", "글꼴"];
 const contact = "shimverz@naver.com";
 
 export function openAbout() {
-  window.dispatchEvent(new Event("noting-open-about"));
+  window.dispatchEvent(new Event("chwp-open-about"));
 }
 
 // 누르면 라이선스 전문을 읽어 펼친다. 여러 파일이면 이름별로 나눠 보인다.
@@ -236,8 +236,8 @@ export function AboutDialog() {
       setTab(tabs[0]);
       setOpen(true);
     };
-    window.addEventListener("noting-open-about", onOpen);
-    return () => window.removeEventListener("noting-open-about", onOpen);
+    window.addEventListener("chwp-open-about", onOpen);
+    return () => window.removeEventListener("chwp-open-about", onOpen);
   }, []);
   const close = () => setOpen(false);
   const content = wide

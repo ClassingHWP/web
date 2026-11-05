@@ -13,7 +13,7 @@ import {
   TextAlignStart,
 } from "lucide-react";
 import { FontField } from "@/FontField";
-import { notReady } from "@/ui-actions";
+import { notReady, useColorMemory } from "@/ui-actions";
 import { ColorPopover } from "@/ColorPicker";
 
 const aligns = [
@@ -112,7 +112,9 @@ function SizeDigits({ value, onChange, onFocus, onBlur }) {
   const [slot, setSlot] = useState((sizeDigitAdvance * 16) / sizeDigitUpem);
   const [focused, setFocused] = useState(false);
   const [caret, setCaret] = useState(0);
-  const shown = formatSize(value);
+  // 블록 안 크기가 섞이면 값이 빈 문자열이다. 누르기 전에는 빈칸으로 보이고, 누르면 0 부터 고친다.
+  const blank = value === "" && !focused;
+  const shown = formatSize(value === "" ? 0 : value);
   const side = slot / 2;
 
   useEffect(() => {
@@ -189,7 +191,7 @@ function SizeDigits({ value, onChange, onFocus, onBlur }) {
       <div className="pointer-events-none flex h-full items-center" aria-hidden="true">
         {Array.from({ length: sizeSlots }, (_, index) => (
           <span key={index} className="flex h-full items-center justify-center" style={{ width: slot }}>
-            {sizeGlyph(shown, index)}
+            {blank ? null : sizeGlyph(shown, index)}
           </span>
         ))}
       </div>
@@ -201,7 +203,7 @@ function SizeDigits({ value, onChange, onFocus, onBlur }) {
         aria-label="글꼴 크기"
         inputMode="decimal"
         className="absolute inset-0 cursor-text bg-transparent text-transparent caret-transparent outline-none"
-        value={shown}
+        value={blank ? "" : shown}
         onFocus={() => { setFocused(true); onFocus(); }}
         onBlur={() => { setFocused(false); onBlur(); }}
         onMouseDown={(event) => {
@@ -226,28 +228,10 @@ function sizeHundredths(text) {
   return Number(match[1]) * 100 + Number(frac);
 }
 
-function huFromHundredths(hundredths, unit) {
-  if (unit === "mm") return Math.round(hundredths * 360 / 127);
-  if (unit === "cm") return Math.round(hundredths * 3600 / 127);
-  if (unit === "inch") return hundredths * 72;
-  if (unit === "px") return Math.round(hundredths * 3 / 4);
-  return hundredths;
-}
-
-function sizeFromHu(hu, unit) {
-  if (unit === "mm") return hu * 25.4 / 7200;
-  if (unit === "cm") return hu * 2.54 / 7200;
-  if (unit === "inch") return hu / 7200;
-  if (unit === "px") return hu / 75;
-  return hu / 100;
-}
-
-function huOf(source) {
-  const hu = Number(source?.fontSize);
-  if (Number.isFinite(hu) && hu > 0) return Math.round(hu);
-  const pt = Number(source?.fontSizePt);
-  if (Number.isFinite(pt) && pt > 0) return Math.round(pt * 100);
-  return 1000;
+// 단위마다 보이는 크기는 코어가 채운다(fontSizeIn). 없으면 pt 값을 쓴다.
+function sizeIn(style, unit) {
+  const value = Number(style?.fontSizeIn?.[unit]);
+  return Number.isFinite(value) ? value : Number(style?.fontSizePt) || 0;
 }
 
 function Stepper({ labelUp, labelDown, onUp, onDown }) {
@@ -263,63 +247,57 @@ function Stepper({ labelUp, labelDown, onUp, onDown }) {
   );
 }
 
-export const defaultCursorStyle = {
-  font: "",
-  fontSwapTo: "",
-  fontSize: 1000,
-  fontSizePt: 10,
-  styleName: "",
-  bold: false,
-  italic: false,
-  underline: false,
-  underlineType: "NONE",
-  strikeout: false,
-  color: "#000000",
-  align: "JUSTIFY",
-  lineSpacing: 160,
-};
-
-// 코어가 준 커서 스타일을 화면이 쓰는 꼴로 바꾼다.
+// 코어가 준 커서 스타일을 화면이 쓰는 꼴로 바꾼다. 블록 안에서 섞인 값(cursor.mixed)은 한글처럼 비운다.
+// 글꼴·크기·줄 간격·스타일은 빈칸, 정렬은 아무것도 누르지 않고, 진하게 같은 켜짐 단추는 꺼 둔다.
 function readCursorStyle(cursor) {
   if (!cursor || typeof cursor !== "object") return null;
+  const mixed = cursor.mixed && typeof cursor.mixed === "object" ? cursor.mixed : {};
   return {
-    font: typeof cursor.font === "string" ? cursor.font : "",
-    fontSwapTo: typeof cursor.fontSwapTo === "string" ? cursor.fontSwapTo : "",
-    fontSize: huOf(cursor),
-    fontSizePt: huOf(cursor) / 100,
+    font: mixed.font ? "" : typeof cursor.font === "string" ? cursor.font : "",
+    fontSwapTo: !mixed.font && typeof cursor.fontSwapTo === "string" ? cursor.fontSwapTo : "",
+    fontSize: cursor.fontSize | 0,
+    fontSizePt: Number(cursor.fontSizePt) || 0,
+    fontSizeIn: cursor.fontSizeIn && typeof cursor.fontSizeIn === "object" ? cursor.fontSizeIn : {},
+    mixedFontSize: !!mixed.fontSize,
     styleName: typeof cursor.styleName === "string" ? cursor.styleName : "",
-    bold: !!cursor.bold,
-    italic: !!cursor.italic,
-    underline: !!cursor.underline,
-    underlineType: cursor.underlineType || (cursor.underline ? "BOTTOM" : "NONE"),
-    strikeout: !!cursor.strikeout,
+    mixedStyle: !!mixed.style,
+    bold: !mixed.bold && !!cursor.bold,
+    italic: !mixed.italic && !!cursor.italic,
+    underline: !mixed.underline && !!cursor.underline,
+    underlineType: mixed.underline ? "NONE" : cursor.underlineType,
+    strikeout: !mixed.strikeout && !!cursor.strikeout,
     color: hexColor(cursor.color),
-    align: cursor.align || "JUSTIFY",
-    lineSpacing: Number.isFinite(Number(cursor.lineSpacing)) ? Number(cursor.lineSpacing) : 160,
+    align: mixed.align ? "" : cursor.align,
+    lineSpacing: Number(cursor.lineSpacing) || 0,
+    lineSpacingValue: Number(cursor.lineSpacingValue) || 0,
+    lineSpacingUnit: typeof cursor.lineSpacingUnit === "string" ? cursor.lineSpacingUnit : "",
+    mixedLineSpacing: !!mixed.lineSpacing,
   };
 }
 
+// 코어가 커서 스타일을 주기 전(문서를 열기 전)에는 칸을 비워 둔다. 기본 서식은 코어가 정한다.
+const emptyCursorStyle = readCursorStyle({});
+
 // 서식 도구 상자와 리본이 같이 쓰는 커서 스타일.
 export function useCursorStyle() {
-  const [style, setStyle] = useState(() => readCursorStyle(window.__notingCursorStyle) || defaultCursorStyle);
+  const [style, setStyle] = useState(() => readCursorStyle(window.__chwpCursorStyle) || emptyCursorStyle);
   useEffect(() => {
     const onStyle = (event) => {
       const next = readCursorStyle(event.detail);
       if (next) setStyle(next);
     };
-    window.addEventListener("noting-cursor-style-changed", onStyle);
-    return () => window.removeEventListener("noting-cursor-style-changed", onStyle);
+    window.addEventListener("chwp-cursor-style-changed", onStyle);
+    return () => window.removeEventListener("chwp-cursor-style-changed", onStyle);
   }, []);
   return style;
 }
 
 export function applyStyle(next) {
   const detail = { ...next };
-  if (detail.lineSpacing != null && detail.lineSpacingType == null) detail.lineSpacingType = "PERCENT";
-  if (typeof window.__notingApplyStyle === "function") {
-    void window.__notingApplyStyle(detail);
+  if (typeof window.__chwpApplyStyle === "function") {
+    void window.__chwpApplyStyle(detail);
   } else {
-    window.dispatchEvent(new CustomEvent("noting-format", { detail }));
+    window.dispatchEvent(new CustomEvent("chwp-format", { detail }));
   }
 }
 
@@ -343,7 +321,8 @@ function toJosa(word) {
 function FontSwapNotice({ face, swapTo }) {
   const [open, setOpen] = useState(false);
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    // 캔버스를 눌러도 닫히게 바깥을 막는다(ColorPopover 와 같다).
+    <PopoverPrimitive.Root modal open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
         <button
           type="button"
@@ -380,20 +359,15 @@ function FontSwapNotice({ face, swapTo }) {
 // 위 줄은 스타일·글꼴·크기, 아래 줄은 글자 모양 단추와 정렬 고르기다. 줄높이 칸은 넣지 않는다.
 export function FormatBar({ layout = "bar" }) {
   const mobile = layout === "mobile";
-  const [style, setStyle] = useState(defaultCursorStyle);
-  const [fonts, setFonts] = useState([]);
+  const [style, setStyle] = useState(emptyCursorStyle);
   const [catalog, setCatalog] = useState([]);
   const [unit, setUnit] = useState("pt");
-  const [sizeText, setSizeText] = useState("10.00");
-  const [lineText, setLineText] = useState("160");
-  const [pen, setPen] = useState(() => {
-    try {
-      const recent = JSON.parse(localStorage.getItem("noting.recentColors") || "[]");
-      return Array.isArray(recent) && /^#[0-9a-f]{6}$/.test(recent[0]) ? recent[0] : "#c42b1c";
-    } catch {
-      return "#c42b1c";
-    }
-  });
+  const [sizeText, setSizeText] = useState("");
+  const [lineText, setLineText] = useState("");
+  // 처음 펜 색은 코어가 정한다. 이 막대에서 고르면 그 색이 다음 펜 색이다.
+  const colors = useColorMemory();
+  const [picked, setPen] = useState("");
+  const pen = picked || colors.pen;
   const sizeFocus = useRef(false);
   const lineFocus = useRef(false);
 
@@ -403,9 +377,9 @@ export function FormatBar({ layout = "bar" }) {
       if (Array.isArray(list)) setCatalog(list);
     };
     const onList = (event) => take(event.detail);
-    window.addEventListener("noting-font-list", onList);
-    take(window.__notingFontList);
-    return () => window.removeEventListener("noting-font-list", onList);
+    window.addEventListener("chwp-font-list", onList);
+    take(window.__chwpFontList);
+    return () => window.removeEventListener("chwp-font-list", onList);
   }, []);
 
   useEffect(() => {
@@ -413,17 +387,13 @@ export function FormatBar({ layout = "bar" }) {
       const next = readCursorStyle(cursor);
       if (!next) return;
       setStyle(next);
-      // 문서에 있는 글꼴은 목록에 더한다. 막힌 글꼴은 고를 수 없게 넣지 않는다.
-      if (next.font && !next.fontSwapTo) {
-        setFonts((list) => (list.includes(next.font) ? list : [...list, next.font]));
-      }
-      if (!sizeFocus.current) setSizeText(formatSize(sizeFromHu(next.fontSize, unit)));
-      if (!lineFocus.current) setLineText(String(next.lineSpacing));
+      if (!sizeFocus.current) setSizeText(next.mixedFontSize ? "" : formatSize(sizeIn(next, unit)));
+      if (!lineFocus.current) setLineText(next.mixedLineSpacing ? "" : String(next.lineSpacingValue));
     };
     const onStyle = (event) => apply(event.detail);
-    window.addEventListener("noting-cursor-style-changed", onStyle);
-    apply(window.__notingCursorStyle);
-    return () => window.removeEventListener("noting-cursor-style-changed", onStyle);
+    window.addEventListener("chwp-cursor-style-changed", onStyle);
+    apply(window.__chwpCursorStyle);
+    return () => window.removeEventListener("chwp-cursor-style-changed", onStyle);
   }, [unit]);
 
   function patch(next) {
@@ -432,20 +402,19 @@ export function FormatBar({ layout = "bar" }) {
   }
 
   function commitSize(text = sizeText) {
+    // 섞인 크기를 그대로 두고 나가면 바꾸지 않는다.
+    if (text === "") return;
     const hundredths = sizeHundredths(text);
     if (hundredths == null) {
-      setSizeText(formatSize(sizeFromHu(huOf(style), unit)));
+      setSizeText(formatSize(sizeIn(style, unit)));
       return;
     }
-    const fontSize = Math.max(1, huFromHundredths(hundredths, unit));
-    patch({ fontSize, fontSizePt: fontSize / 100 });
-    setSizeText(formatSize(sizeFromHu(fontSize, unit)));
+    // 단위를 HU 로 바꾸고 범위를 지키는 일은 코어가 한다. 새 크기는 커서 스타일로 돌아온다.
+    applyStyle({ fontSizeValue: hundredths / 100, fontSizeUnit: unit });
   }
 
-  function stepSize(deltaPt) {
-    const fontSize = Math.max(1, huOf(style) + deltaPt * 100);
-    patch({ fontSize, fontSizePt: fontSize / 100 });
-    setSizeText(formatSize(sizeFromHu(fontSize, unit)));
+  function stepSize(dir) {
+    applyStyle({ fontSizeStep: dir });
   }
 
   // 시안의 서식 도구 상자. 칸 높이는 --ui-h(넓은 화면은 낮게), 둥근 모서리, 연회색 테두리다.
@@ -463,16 +432,16 @@ export function FormatBar({ layout = "bar" }) {
       >
         <span className="flex min-w-0 items-center gap-[0.35em]">
           <TextAlignJustify className="size-[0.9em] text-[#737373]" />
-          <span className="truncate">{style.styleName || "바탕글"}</span>
+          <span className="truncate">{style.mixedStyle ? "" : style.styleName}</span>
         </span>
         <ChevronDown className="size-[0.8em] text-[#737373]" />
       </button>
       <FontField
         value={style.font}
         lead={style.fontSwapTo ? <FontSwapNotice face={style.font} swapTo={style.fontSwapTo} /> : null}
-        fonts={[...new Set([...catalog, ...fonts].filter(Boolean))]}
+        fonts={catalog}
         onPick={(font) => patch({ font })}
-        onCommit={() => window.dispatchEvent(new Event("noting-focus-editor"))}
+        onCommit={() => window.dispatchEvent(new Event("chwp-focus-editor"))}
         className={mobile ? "min-w-0 flex-1" : undefined}
       />
       <div className={boxClass}>
@@ -486,7 +455,7 @@ export function FormatBar({ layout = "bar" }) {
           value={unit}
           onValueChange={(nextUnit) => {
             setUnit(nextUnit);
-            setSizeText(formatSize(sizeFromHu(huOf(style), nextUnit)));
+            setSizeText(formatSize(sizeIn(style, nextUnit)));
           }}
           items={sizeUnits}
           label="글꼴 크기 단위"
@@ -498,10 +467,10 @@ export function FormatBar({ layout = "bar" }) {
         <Stepper labelUp="글꼴 크기 크게" labelDown="글꼴 크기 작게" onUp={() => stepSize(1)} onDown={() => stepSize(-1)} />
       </div>
       {mobile ? <span aria-hidden="true" className="h-0 basis-full" /> : null}
-      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] font-bold shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="두껍게" aria-pressed={style.bold} onClick={() => patch({ bold: !style.bold })}>
+      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] font-bold shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="두껍게" aria-pressed={style.bold} onClick={() => patch({ toggle: "bold" })}>
         가
       </button>
-      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] italic shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="이탤릭" aria-pressed={style.italic} onClick={() => patch({ italic: !style.italic })}>
+      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] italic shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="이탤릭" aria-pressed={style.italic} onClick={() => patch({ toggle: "italic" })}>
         가
       </button>
       {/* 밑줄: 가 = 켜고 끄기, ▾ = 종류 고르기. 한 상자 안에서 누르는 곳만 나뉜다 */}
@@ -511,10 +480,7 @@ export function FormatBar({ layout = "bar" }) {
           className="ui-part h-full pr-[0.15em] pl-[0.4em]"
           aria-label="밑줄"
           aria-pressed={style.underline}
-          onClick={() => {
-            const on = !style.underline;
-            patch({ underline: on, underlineType: on ? (style.underlineType === "NONE" ? "BOTTOM" : style.underlineType) : "NONE" });
-          }}
+          onClick={() => patch({ toggle: "underline" })}
         >
           <span className="underline underline-offset-[0.2em]">가</span>
         </button>
@@ -530,7 +496,7 @@ export function FormatBar({ layout = "bar" }) {
         </PickList>
       </div>
       <div className={splitClass}>
-        <button type="button" className="ui-part h-full pr-[0.15em] pl-[0.4em]" aria-label="취소줄" aria-pressed={style.strikeout} onClick={() => patch({ strikeout: !style.strikeout })}>
+        <button type="button" className="ui-part h-full pr-[0.15em] pl-[0.4em]" aria-label="취소줄" aria-pressed={style.strikeout} onClick={() => patch({ toggle: "strikeout" })}>
           <span className="line-through">가</span>
         </button>
         <PickList
@@ -560,9 +526,9 @@ export function FormatBar({ layout = "bar" }) {
           value={style.color}
           align="end"
           onPick={(hex) => {
-            const next = hex || "#000000";
-            setPen(next);
-            patch({ color: next });
+            // 빈 색은 코어가 기본 글자 색으로 바꾼다.
+            if (hex) setPen(hex);
+            patch({ color: hex || "" });
           }}
         >
           <button type="button" className={caretPart} aria-label="글꼴 색상 선택">
@@ -612,33 +578,24 @@ export function FormatBar({ layout = "bar" }) {
             onBlur={() => {
               lineFocus.current = false;
               const n = Number(lineText);
-              if (!Number.isFinite(n)) {
-                setLineText(String(style.lineSpacing));
+              if (lineText === "" || !Number.isFinite(n)) {
+                setLineText(style.mixedLineSpacing ? "" : String(style.lineSpacingValue));
                 return;
               }
-              const next = Math.max(0, Math.round(n));
-              patch({ lineSpacing: next });
-              setLineText(String(next));
+              // 문단의 간격 종류 단위(% 또는 pt)로 읽는 일은 코어가 한다.
+              applyStyle({ lineSpacingValue: n });
             }}
             onChange={(event) => setLineText(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();
             }}
           />
-          <span className="pr-[0.6em]">%</span>
+          <span className="pr-[0.6em]">{style.lineSpacingUnit}</span>
           <Stepper
             labelUp="줄높이 크게"
             labelDown="줄높이 작게"
-            onUp={() => {
-              const next = style.lineSpacing + 10;
-              patch({ lineSpacing: next });
-              setLineText(String(next));
-            }}
-            onDown={() => {
-              const next = Math.max(0, style.lineSpacing - 10);
-              patch({ lineSpacing: next });
-              setLineText(String(next));
-            }}
+            onUp={() => applyStyle({ lineSpacingStep: 1 })}
+            onDown={() => applyStyle({ lineSpacingStep: -1 })}
           />
         </div>
       )}

@@ -2,9 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDown, Ellipsis, Expand, Maximize2 } from "lucide-react";
 import { ribbonIcons } from "./ribbon-icons.js";
 import { applyStyle, useCursorStyle } from "./FormatBar.jsx";
-import { leaveBand, notReady, requestZoom, selectionAction, toggleRulers, useRulersShown } from "./ui-actions.js";
+import { drawShape, leaveBand, notReady, pickPicture, requestZoom, selectionAction, toggleRulers, useRulersShown } from "./ui-actions.js";
 import { ColorPopover } from "./ColorPicker.jsx";
-import { openFormatDialog } from "./FormatDialogs.jsx";
+import { applyPageSetup, openFormatDialog, pageMarginPresets } from "./FormatDialogs.jsx";
+import { openTableDialog } from "./TableDialog.jsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // 시안(한컴 스타일 A)의 리본. 탭마다 묶음을 한 줄로 두고 세로선으로 나눈다.
 // 아직 없는 기능도 시안대로 두고, 누르면 준비 중이라고 알린다. 시안에서 흐린 단추만 disabled 다.
@@ -43,14 +51,15 @@ function Separator() {
 }
 
 // 아이콘 위, 이름 아래인 큰 단추. menu 가 있으면 이름 뒤에 ▾ 를 붙인다.
+// menuItems 가 있으면 누를 때 그 목록을 펼친다. 없으면 run 을 부른다.
 function BigButton({ item, onUse }) {
-  return (
+  const button = (
     <button
       type="button"
       className={`ui-rb flex h-[4.1em] min-w-[3.4em] flex-none flex-col items-center justify-start gap-[0.2em] rounded-[0.45em] px-[0.3em] pt-[0.35em] ${item.on ? "on" : ""}`}
       disabled={item.disabled}
       aria-pressed={item.on === undefined ? undefined : !!item.on}
-      onClick={() => run(item, onUse)}
+      onClick={item.menuItems ? undefined : () => run(item, onUse)}
     >
       <RibbonIcon name={item.icon || item.label} />
       <span className="max-w-[6.4em] text-center text-[0.9em] leading-[1.15] break-keep">
@@ -58,6 +67,23 @@ function BigButton({ item, onUse }) {
         {item.menu ? <ChevronDown className="ml-[0.05em] inline size-[0.75em] align-[-0.1em] text-[#737373]" /> : null}
       </span>
     </button>
+  );
+  if (!item.menuItems) return button;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {item.menuItems.map((entry, index) =>
+          entry.type === "separator" ? (
+            <DropdownMenuSeparator key={`sep-${index}`} />
+          ) : (
+            <DropdownMenuItem key={entry.label} onSelect={() => { onUse?.(); entry.run(); }}>
+              {entry.label}
+            </DropdownMenuItem>
+          ),
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -111,6 +137,13 @@ function GalleryScroll({ onUse }) {
 }
 
 const shapes = ["글상자", "직사각형", "타원", "직선", "화살표", "곡선", "다각형", "삼각형", "그리기"];
+// 그릴 수 있는 도형. 누르면 다음 끌기 한 번으로 그 도형을 그린다.
+const shapeTools = { 직사각형: 1, 타원: 2, 직선: 3, 글상자: 4, "세로 글상자": 5 };
+const drawRun = (label) => (shapeTools[label] ? { run: () => drawShape(shapeTools[label]) } : {});
+const shapeMenu = {
+  menu: true,
+  menuItems: ["직사각형", "타원", "직선", "글상자", "세로 글상자"].map((label) => ({ label, ...drawRun(label) })),
+};
 
 function ShapeGallery({ onUse }) {
   return (
@@ -123,7 +156,7 @@ function ShapeGallery({ onUse }) {
             className="ui-rb flex h-[1.2em] w-[1.9em] items-center justify-center rounded-[0.3em]"
             aria-label={label}
             title={label}
-            onClick={() => run({ label }, onUse)}
+            onClick={() => run({ label, ...drawRun(label) }, onUse)}
           >
             <RibbonIcon name={label} className="size-[1em]" />
           </button>
@@ -134,10 +167,20 @@ function ShapeGallery({ onUse }) {
   );
 }
 
-const paraStyles = ["바탕글", "본문", "개요 1", "개요 2"];
+// 문서 스타일 표(코어). 갤러리에는 앞의 넷을 보인다.
+function useStyleNames() {
+  const [names, setNames] = useState(() => (Array.isArray(window.__chwpStyleList) ? window.__chwpStyleList : []));
+  useEffect(() => {
+    const onList = (event) => setNames(Array.isArray(event.detail) ? event.detail : []);
+    window.addEventListener("chwp-style-list", onList);
+    return () => window.removeEventListener("chwp-style-list", onList);
+  }, []);
+  return names;
+}
 
 function StyleGallery({ onUse }) {
   const style = useCursorStyle();
+  const paraStyles = useStyleNames().slice(0, 4);
   return (
     <div role="listbox" aria-label="스타일" className="flex h-[3.9em] flex-none overflow-hidden rounded-[0.45em] shadow-[inset_0_0_0_1px_#d4d4d4]">
       <div className="grid grid-cols-2 content-center gap-x-[0.2em] gap-y-[0.1em] px-[0.2em]">
@@ -146,8 +189,8 @@ function StyleGallery({ onUse }) {
             key={name}
             type="button"
             role="option"
-            aria-selected={style.styleName === name}
-            className={`ui-rb flex h-[1.8em] w-[6.4em] items-center gap-[0.45em] rounded-[0.3em] px-[0.5em] text-left text-[0.9em] ${style.styleName === name ? "on" : ""}`}
+            aria-selected={!style.mixedStyle && style.styleName === name}
+            className={`ui-rb flex h-[1.8em] w-[6.4em] items-center gap-[0.45em] rounded-[0.3em] px-[0.5em] text-left text-[0.9em] ${!style.mixedStyle && style.styleName === name ? "on" : ""}`}
             onClick={() => run({ label: "스타일 바꾸기" }, onUse)}
           >
             <RibbonIcon name="문단 정렬" className="size-[1em] text-[#737373]" />
@@ -169,10 +212,8 @@ function focusFontField() {
 function CharMini({ onUse }) {
   const style = useCursorStyle();
   const toggle = (patch) => ({ run: () => applyStyle(patch) });
-  const stepSize = (delta) => {
-    const fontSize = Math.max(100, (style.fontSize || 1000) + delta);
-    applyStyle({ fontSize, fontSizePt: fontSize / 100 });
-  };
+  // 한 단계(1pt)와 범위는 코어가 정한다.
+  const stepSize = (delta) => applyStyle({ fontSizeStep: Math.sign(delta) });
   const outline = "ui-outline flex h-[1.8em] items-center justify-between rounded-[0.4em] pr-[0.3em] pl-[0.5em] text-[0.9em]";
   return (
     <div className="flex flex-none flex-col gap-[0.25em]">
@@ -186,7 +227,7 @@ function CharMini({ onUse }) {
           <ChevronDown className="size-[0.8em] flex-none text-[#737373]" />
         </button>
         <div className="flex h-[1.8em] items-center overflow-hidden rounded-[0.4em] text-[0.9em] shadow-[inset_0_0_0_1px_#d4d4d4]">
-          <span className="w-[2.8em] text-center">{((style.fontSize || 1000) / 100).toFixed(1)}</span>
+          <span className="w-[2.8em] text-center">{style.mixedFontSize || !style.fontSizePt ? "" : style.fontSizePt.toFixed(1)}</span>
           <span className="pr-[0.3em] text-[#737373]">pt</span>
           <span className="flex h-full flex-col border-l border-[#d4d4d4]">
             <button type="button" className="ui-ghost flex flex-1 items-center px-[0.15em]" aria-label="글꼴 크기 크게" onClick={() => stepSize(100)}>
@@ -199,29 +240,29 @@ function CharMini({ onUse }) {
         </div>
       </div>
       <div className="flex items-center gap-[0.15em]">
-        <SmallButton item={{ label: "진하게", on: style.bold, ...toggle({ bold: !style.bold }) }} onUse={onUse}>
+        <SmallButton item={{ label: "진하게", on: style.bold, ...toggle({ toggle: "bold" }) }} onUse={onUse}>
           <span className="font-bold">가</span>
         </SmallButton>
-        <SmallButton item={{ label: "기울임", on: style.italic, ...toggle({ italic: !style.italic }) }} onUse={onUse}>
+        <SmallButton item={{ label: "기울임", on: style.italic, ...toggle({ toggle: "italic" }) }} onUse={onUse}>
           <span className="italic">가</span>
         </SmallButton>
         <SmallButton
           item={{
             label: "밑줄",
             on: style.underline,
-            ...toggle({ underline: !style.underline, underlineType: style.underline ? "NONE" : "BOTTOM" }),
+            ...toggle({ toggle: "underline" }),
           }}
           onUse={onUse}
         >
           <span className="underline">가</span>
           <ChevronDown className="size-[0.7em] text-[#737373]" />
         </SmallButton>
-        <SmallButton item={{ label: "취소선", on: style.strikeout, ...toggle({ strikeout: !style.strikeout }) }} onUse={onUse}>
+        <SmallButton item={{ label: "취소선", on: style.strikeout, ...toggle({ toggle: "strikeout" }) }} onUse={onUse}>
           <span className="line-through">가</span>
           <ChevronDown className="size-[0.7em] text-[#737373]" />
         </SmallButton>
         <SmallButton item={{ label: "형광펜" }} onUse={onUse} />
-        <ColorPopover title="글자 색" value={style.color} onPick={(hex) => { onUse?.(); applyStyle({ color: hex || "#000000" }); }}>
+        <ColorPopover title="글자 색" value={style.color} onPick={(hex) => { onUse?.(); applyStyle({ color: hex || "" }); }}>
           <button type="button" className="ui-rb flex h-[1.9em] items-center gap-[0.1em] rounded-[0.4em] px-[0.3em]" aria-label="글자 색" title="글자 색">
             <span className="flex flex-col items-center leading-none">
               가
@@ -235,8 +276,9 @@ function CharMini({ onUse }) {
   );
 }
 
+// 한 단계는 문단의 간격 종류마다 다르다(10% 또는 1pt). 코어가 정한다.
 function stepLineSpacing(style, delta) {
-  applyStyle({ lineSpacing: Math.max(0, (style.lineSpacing || 160) + delta) });
+  applyStyle({ lineSpacingStep: Math.sign(delta) });
 }
 
 function LineSpacingStack({ onUse }) {
@@ -324,6 +366,28 @@ const big = (label, extra = {}) => ({ type: "big", label, ...extra });
 const sep = { type: "sep" };
 const custom = (Component) => ({ type: "custom", Component });
 
+// 편집 용지. 세로·가로·쪽 여백은 커서가 있는 구역에 바로 적용한다.
+const pageDialog = () => openFormatDialog("page");
+const portrait = { run: () => applyPageSetup({ landscape: false }) };
+const landscape = { run: () => applyPageSetup({ landscape: true }) };
+const marginMenu = {
+  menu: true,
+  menuItems: [
+    ...pageMarginPresets.map((label) => ({ label, run: () => applyPageSetup({ marginPreset: label }) })),
+    { type: "separator" },
+    { label: "쪽 여백 설정…", run: pageDialog },
+  ],
+};
+// 글자 방향. 한글 쪽 탭의 목록과 같은 세 가지를 커서가 있는 구역에 바로 적용한다.
+const textDirectionMenu = {
+  menu: true,
+  menuItems: [
+    { label: "가로 쓰기", run: () => applyPageSetup({ textDirection: 0 }) },
+    { label: "세로 쓰기(영문 눕힘)", run: () => applyPageSetup({ textDirection: 1 }) },
+    { label: "세로 쓰기(영문 세움)", run: () => applyPageSetup({ textDirection: 2 }) },
+  ],
+};
+
 // 탭별 리본. 시안 Main.dc.html 의 순서·묶음 그대로다.
 const ribbons = {
   [bandTab]: [
@@ -340,8 +404,8 @@ const ribbons = {
     big("닫기", { run: leaveBand }),
   ],
   편집: [
-    big("되돌리기"),
-    big("다시 실행"),
+    big("되돌리기", { run: () => selectionAction("undo") }),
+    big("다시 실행", { run: () => selectionAction("redo") }),
     big("오려두기", { run: () => selectionAction("cut") }),
     big("복사하기", { run: () => selectionAction("copy") }),
     big("붙여넣기", { run: () => selectionAction("paste") }),
@@ -351,15 +415,15 @@ const ribbons = {
     big("문단 모양", { run: () => openFormatDialog("para") }),
     big("스타일", { menu: true }),
     sep,
-    big("세로"),
-    big("가로"),
-    big("쪽 여백", { menu: true }),
+    big("세로", portrait),
+    big("가로", landscape),
+    big("쪽 여백", marginMenu),
     big("바탕쪽"),
     big("단", { menu: true }),
     sep,
-    big("도형", { menu: true }),
-    big("그림", { menu: true }),
-    big("표", { menu: true }),
+    big("도형", shapeMenu),
+    big("그림", { run: pickPicture }),
+    big("표", { run: openTableDialog }),
     big("차트", { menu: true }),
   ],
   보기: [
@@ -368,16 +432,16 @@ const ribbons = {
     big("격자", { menu: true }),
     big("안내선", { menu: true }),
     sep,
-    big("축소", { run: () => requestZoom({ step: -10 }) }),
-    big("확대", { run: () => requestZoom({ step: 10 }) }),
+    big("축소", { run: () => requestZoom({ step: -1 }) }),
+    big("확대", { run: () => requestZoom({ step: 1 }) }),
     big("100%", { run: () => requestZoom({ percent: 100 }) }),
     custom(FitStack),
   ],
   입력: [
     custom(ShapeGallery),
     sep,
-    big("그림", { menu: true }),
-    big("표", { menu: true }),
+    big("그림", { run: pickPicture }),
+    big("표", { run: openTableDialog }),
     big("차트", { menu: true }),
     big("글맵시", { menu: true }),
     big("수식", { menu: true }),
@@ -404,12 +468,12 @@ const ribbons = {
     custom(LineSpacingStack),
   ],
   쪽: [
-    big("편집 용지"),
-    big("세로"),
-    big("가로"),
-    big("쪽 여백", { menu: true }),
+    big("편집 용지", { run: pageDialog }),
+    big("세로", portrait),
+    big("가로", landscape),
+    big("쪽 여백", marginMenu),
     sep,
-    big("글자 방향", { menu: true }),
+    big("글자 방향", textDirectionMenu),
     sep,
     big("바탕쪽"),
     big("머리말", { menu: true }),
@@ -557,14 +621,15 @@ export function RibbonFrame({ name, onUse }) {
 // 모바일(시안 MobileEdit). 화면 아래에 고른 탭의 한 묶음씩 보이고, 양옆 ‹ › 나 밀기로 넘긴다.
 // 묶음과 명령은 데스크톱 리본과 같고, 칸 모양만 손가락에 맞춘다.
 
+// menuItems 가 있으면 데스크톱 큰 단추처럼 누를 때 그 목록을 펼친다.
 function MobileTile({ item, onUse, children }) {
-  return (
+  const button = (
     <button
       type="button"
       className={`ui-rb flex h-[76px] min-w-0 flex-col items-center justify-start gap-[4px] rounded-[10px] px-[2px] pt-[10px] ${item.on ? "on" : ""}`}
       disabled={item.disabled}
       aria-pressed={item.on === undefined ? undefined : !!item.on}
-      onClick={() => run(item, onUse)}
+      onClick={item.menuItems ? undefined : () => run(item, onUse)}
     >
       {children || <RibbonIcon name={item.icon || item.label} className="size-[26px]" />}
       <span className="flex flex-wrap items-center justify-center gap-[1px] text-center text-[12px] leading-[1.2] tracking-[-0.02em] break-keep">
@@ -572,6 +637,23 @@ function MobileTile({ item, onUse, children }) {
         {item.menu ? <ChevronDown className="size-[11px] text-[#737373]" /> : null}
       </span>
     </button>
+  );
+  if (!item.menuItems) return button;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        {item.menuItems.map((entry, index) =>
+          entry.type === "separator" ? (
+            <DropdownMenuSeparator key={`sep-${index}`} />
+          ) : (
+            <DropdownMenuItem key={entry.label} onSelect={() => { onUse?.(); entry.run(); }}>
+              {entry.label}
+            </DropdownMenuItem>
+          ),
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -612,8 +694,9 @@ function MobileViewChecks({ labels, onUse }) {
 
 function MobileStyles({ onUse }) {
   const style = useCursorStyle();
+  const paraStyles = useStyleNames().slice(0, 4);
   return paraStyles.map((name) => {
-    const on = style.styleName === name;
+    const on = !style.mixedStyle && style.styleName === name;
     return (
       <button
         key={name}
@@ -635,20 +718,20 @@ function MobileCharTiles({ onUse }) {
   return (
     <>
       <MobileTile item={{ label: "글자 모양", run: () => openFormatDialog("char") }} onUse={onUse} />
-      <MobileTile item={{ label: "진하게", on: style.bold, run: toggle({ bold: !style.bold }) }} onUse={onUse}>
+      <MobileTile item={{ label: "진하게", on: style.bold, run: toggle({ toggle: "bold" }) }} onUse={onUse}>
         <GlyphMark><b>가</b></GlyphMark>
       </MobileTile>
-      <MobileTile item={{ label: "기울임", on: style.italic, run: toggle({ italic: !style.italic }) }} onUse={onUse}>
+      <MobileTile item={{ label: "기울임", on: style.italic, run: toggle({ toggle: "italic" }) }} onUse={onUse}>
         <GlyphMark><i>가</i></GlyphMark>
       </MobileTile>
       <MobileTile
-        item={{ label: "밑줄", on: style.underline, run: toggle({ underline: !style.underline, underlineType: style.underline ? "NONE" : "BOTTOM" }) }}
+        item={{ label: "밑줄", on: style.underline, run: toggle({ toggle: "underline" }) }}
         onUse={onUse}
       >
         <GlyphMark><u>가</u></GlyphMark>
       </MobileTile>
       <MobileTile item={{ label: "형광펜" }} onUse={onUse} />
-      <ColorPopover title="글자 색" value={style.color} onPick={(hex) => { onUse?.(); applyStyle({ color: hex || "#000000" }); }}>
+      <ColorPopover title="글자 색" value={style.color} onPick={(hex) => { onUse?.(); applyStyle({ color: hex || "" }); }}>
         <button type="button" className="ui-rb flex h-[76px] min-w-0 flex-col items-center justify-start gap-[4px] rounded-[10px] px-[2px] pt-[10px]">
           <GlyphMark>
             <span className="flex flex-col items-center leading-none">
@@ -696,20 +779,20 @@ const mobilePages = {
     ["넣기", [tile("쪽 번호 넣기", { icon: "쪽 번호 매기기" }), tile("현재 쪽만 감추기"), tile("지우기", { icon: "지우기" })]],
   ],
   편집: [
-    ["기본", [tile("되돌리기"), tile("다시 실행"), tile("오려두기", { run: () => selectionAction("cut") }), tile("복사하기", { run: () => selectionAction("copy") }), tile("붙여넣기", { run: () => selectionAction("paste") }), tile("찾기 및 바꾸기")]],
+    ["기본", [tile("되돌리기", { run: () => selectionAction("undo") }), tile("다시 실행", { run: () => selectionAction("redo") }), tile("오려두기", { run: () => selectionAction("cut") }), tile("복사하기", { run: () => selectionAction("copy") }), tile("붙여넣기", { run: () => selectionAction("paste") }), tile("찾기 및 바꾸기")]],
     ["모양", [tile("글자 모양", { run: charDialog }), tile("문단 모양", { run: paraDialog }), tile("스타일", { menu: true })]],
-    ["쪽", [tile("세로"), tile("가로"), tile("쪽 여백", { menu: true }), tile("바탕쪽"), tile("단", { menu: true })]],
-    ["개체", [tile("도형", { menu: true }), tile("그림", { menu: true }), tile("표", { menu: true }), tile("차트", { menu: true })]],
+    ["쪽", [tile("세로", portrait), tile("가로", landscape), tile("쪽 여백", { menu: true, run: pageDialog }), tile("바탕쪽"), tile("단", { menu: true })]],
+    ["개체", [tile("도형", shapeMenu), tile("그림", { run: pickPicture }), tile("표", { run: openTableDialog }), tile("차트", { menu: true })]],
   ],
   보기: [
     ["표시", [view(MobileViewChecks, { labels: ["문단 부호", "그림", "조판 부호", "투명 선", "교정 부호", "메모"] })], 6],
     ["화면", [view(MobileViewChecks, { labels: ["상황 선", "문서 탭", "눈금자"] })], 3],
     ["격자", [tile("격자", { menu: true }), tile("안내선", { menu: true })]],
-    ["배율", [tile("축소", { run: () => requestZoom({ step: -10 }) }), tile("확대", { run: () => requestZoom({ step: 10 }) }), tile("100%", { run: () => requestZoom({ percent: 100 }) }), view(MobileFit)], 5],
+    ["배율", [tile("축소", { run: () => requestZoom({ step: -1 }) }), tile("확대", { run: () => requestZoom({ step: 1 }) }), tile("100%", { run: () => requestZoom({ percent: 100 }) }), view(MobileFit)], 5],
   ],
   입력: [
-    ["도형", [tile("글상자"), tile("직사각형"), tile("타원"), tile("직선"), tile("화살표"), tile("더 보기", { glyph: "more" })]],
-    ["개체", [tile("그림", { menu: true }), tile("표", { menu: true }), tile("차트", { menu: true }), tile("글맵시", { menu: true }), tile("수식", { menu: true })]],
+    ["도형", [tile("글상자", drawRun("글상자")), tile("직사각형", drawRun("직사각형")), tile("타원", drawRun("타원")), tile("직선", drawRun("직선")), tile("화살표"), tile("더 보기", { glyph: "more" })]],
+    ["개체", [tile("그림", { run: pickPicture }), tile("표", { run: openTableDialog }), tile("차트", { menu: true }), tile("글맵시", { menu: true }), tile("수식", { menu: true })]],
     ["주석", [tile("각주"), tile("미주"), tile("메모")]],
     ["링크", [tile("하이퍼링크")]],
   ],
@@ -721,8 +804,8 @@ const mobilePages = {
     ["줄 간격", [view(MobileLineSpacing)], 2],
   ],
   쪽: [
-    ["용지", [tile("편집 용지"), tile("세로"), tile("가로"), tile("쪽 여백", { menu: true })]],
-    ["방향", [tile("글자 방향", { menu: true })]],
+    ["용지", [tile("편집 용지", { run: pageDialog }), tile("세로", portrait), tile("가로", landscape), tile("쪽 여백", { menu: true, run: pageDialog })]],
+    ["방향", [tile("글자 방향", textDirectionMenu)]],
     ["쪽 꾸미기", [tile("바탕쪽"), tile("머리말", { menu: true }), tile("꼬리말", { menu: true }), tile("쪽 테두리/배경")]],
     ["번호", [tile("쪽 번호 매기기"), tile("새 번호로 시작"), tile("현재 쪽만 감추기"), tile("줄 번호", { menu: true })]],
     ["나누기", [tile("쪽 나누기", { disabled: true }), tile("단 나누기"), tile("쪽 지우기")]],

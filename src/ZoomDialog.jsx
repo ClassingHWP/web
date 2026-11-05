@@ -1,8 +1,18 @@
 import { useEffect, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Minus, Plus, Search, X } from "lucide-react";
+import { Choice } from "./FormatDialogs.jsx";
 
-const zoomPresets = [100, 125, 150, 200, 300, 500];
+// 미리 정한 배율·한 걸음·칸 수는 코어가 준다(zoomDialogSpec).
+function useZoomSpec() {
+  const [spec, setSpec] = useState(() => window.__chwpZoomSpec || null);
+  useEffect(() => {
+    const onSpec = (event) => setSpec(event.detail || null);
+    window.addEventListener("chwp-zoom-spec", onSpec);
+    return () => window.removeEventListener("chwp-zoom-spec", onSpec);
+  }, []);
+  return spec || { presets: [], step: 10, minPercent: 1, maxGrid: 8, cols: 4, rows: 3 };
+}
 
 const zoomSections = [
   { id: "zoom", label: "배율" },
@@ -18,24 +28,15 @@ const pageShapes = [
   { id: "fit", label: "맞춤" },
 ];
 
-function requestZoom(detail) {
-  window.dispatchEvent(new CustomEvent("noting-zoom", { detail }));
+// 쪽 모양과 배율을 함께 넘긴다. 어떻게 맞출지는 코어가 정한다.
+function requestZoomDialog(detail) {
+  window.dispatchEvent(new CustomEvent("chwp-zoom-dialog", { detail }));
 }
 
-function requestGrid(detail) {
-  window.dispatchEvent(new CustomEvent("noting-page-grid", { detail }));
-}
-
-function clampPercent(value) {
-  const next = Number(value);
-  if (!Number.isFinite(next)) return 100;
-  return Math.min(800, Math.max(10, Math.round(next)));
-}
-
-export function ZoomAdjust({ value, onValue, onStep, disabled = false }) {
+export function ZoomAdjust({ value, onValue, onStep, step = 10, disabled = false }) {
   return (
     <div className={`ui-box flex h-11 max-w-full items-center self-start overflow-hidden rounded-lg ${disabled ? "pointer-events-none opacity-50" : ""}`}>
-      <button type="button" className="ui-ghost flex h-full w-11 items-center justify-center" aria-label="배율 줄이기" disabled={disabled} onClick={() => onStep(-10)}>
+      <button type="button" className="ui-ghost flex h-full w-11 items-center justify-center" aria-label="배율 줄이기" disabled={disabled} onClick={() => onStep(-step)}>
         <Minus className="size-[18px]" />
       </button>
       <label className="flex h-full items-center gap-0.5 pr-2">
@@ -48,7 +49,7 @@ export function ZoomAdjust({ value, onValue, onStep, disabled = false }) {
         />
         %
       </label>
-      <button type="button" className="ui-ghost flex h-full w-11 items-center justify-center" aria-label="배율 높이기" disabled={disabled} onClick={() => onStep(10)}>
+      <button type="button" className="ui-ghost flex h-full w-11 items-center justify-center" aria-label="배율 높이기" disabled={disabled} onClick={() => onStep(step)}>
         <Plus className="size-[18px]" />
       </button>
     </div>
@@ -87,8 +88,8 @@ export function useZoomState(zoomFocus) {
   useEffect(() => {
     const onZoom = (event) => {
       const detail = event.detail || {};
-      if (detail.zoomMode === "fitPage" || detail.fitPage || detail.zoomLabel === "쪽 맞춤") setZoomFit("쪽 맞춤");
-      else if (detail.zoomMode === "fitWidth" || detail.fitWidth || detail.zoomLabel === "폭 맞춤") setZoomFit("폭 맞춤");
+      if (detail.zoomMode === "fitPage" || detail.fitPage) setZoomFit("쪽 맞춤");
+      else if (detail.zoomMode === "fitWidth" || detail.fitWidth) setZoomFit("폭 맞춤");
       else setZoomFit("");
       const next = Number(detail.percent);
       if (!zoomFocus?.current && Number.isFinite(next)) setZoomText(String(next));
@@ -100,11 +101,11 @@ export function useZoomState(zoomFocus) {
         });
       }
     };
-    window.addEventListener("noting-zoom-changed", onZoom);
-    window.addEventListener("noting-viewport-changed", onZoom);
+    window.addEventListener("chwp-zoom-changed", onZoom);
+    window.addEventListener("chwp-viewport-changed", onZoom);
     return () => {
-      window.removeEventListener("noting-zoom-changed", onZoom);
-      window.removeEventListener("noting-viewport-changed", onZoom);
+      window.removeEventListener("chwp-zoom-changed", onZoom);
+      window.removeEventListener("chwp-viewport-changed", onZoom);
     };
   }, [zoomFocus]);
   return { zoomText, setZoomText, zoomFit, setZoomFit, grid };
@@ -112,6 +113,7 @@ export function useZoomState(zoomFocus) {
 
 // trigger 를 주면 그 단추로 연다(모바일 위 막대). 좁은 화면에서는 시안(MobileZoom)처럼 아래에서 올라오는 시트다.
 export function ZoomDialog({ zoomText, zoomFit, grid, trigger = null }) {
+  const spec = useZoomSpec();
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState("100");
   const [custom, setCustom] = useState(zoomText);
@@ -127,30 +129,24 @@ export function ZoomDialog({ zoomText, zoomFit, grid, trigger = null }) {
     const percent = Number(zoomText);
     if (zoomFit === "쪽 맞춤") setZoom("page");
     else if (zoomFit === "폭 맞춤") setZoom("width");
-    else if (zoomPresets.includes(percent)) setZoom(String(percent));
+    else if (spec.presets.includes(percent)) setZoom(String(percent));
     else setZoom("custom");
     setCustom(zoomText || "100");
     setShape(shapeFromGrid(grid.mode));
-    setCols(grid.cols > 1 ? grid.cols : 4);
-    setRows(grid.rows > 1 ? grid.rows : 3);
+    setCols(grid.cols > 1 ? grid.cols : spec.cols);
+    setRows(grid.rows > 1 ? grid.rows : spec.rows);
     setMove("vertical");
-  }, [open, zoomText, zoomFit, grid]);
+  }, [open, zoomText, zoomFit, grid, spec]);
 
   function apply() {
-    const gridFit = shape === "fit";
-    const mode = shape === "fit" ? "single" : shape;
-    requestGrid({
-      mode,
-      cols: mode === "grid" ? cols : 1,
-      rows: mode === "grid" ? rows : 1,
-      fit: gridFit,
+    // 쪽 모양 "맞춤"의 뜻과 배율 범위는 코어가 정한다.
+    requestZoomDialog({
+      shape,
+      cols,
+      rows,
+      zoom: zoom === "page" || zoom === "width" ? zoom : "",
+      percent: Number(zoom === "custom" ? custom : zoom) || 0,
     });
-    if (!gridFit) {
-      if (zoom === "page") requestZoom({ fit: "page" });
-      else if (zoom === "width") requestZoom({ fit: "width" });
-      else if (zoom === "custom") requestZoom({ percent: clampPercent(custom) });
-      else requestZoom({ percent: Number(zoom) });
-    }
     setOpen(false);
   }
 
@@ -197,7 +193,7 @@ export function ZoomDialog({ zoomText, zoomFit, grid, trigger = null }) {
               <legend className="px-1.5 font-medium">배율</legend>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 sm:gap-x-6">
                 <div className="flex flex-col gap-2.5">
-                  {zoomPresets.map((percent) => (
+                  {spec.presets.map((percent) => (
                     <Radio key={percent} name="zoom" value={String(percent)} checked={zoom === String(percent)} onChange={setZoom}>
                       {percent}%
                     </Radio>
@@ -209,11 +205,13 @@ export function ZoomDialog({ zoomText, zoomFit, grid, trigger = null }) {
                   <Radio name="zoom" value="custom" checked={zoom === "custom"} onChange={setZoom}>사용자 정의</Radio>
                   <ZoomAdjust
                     value={custom}
+                    step={spec.step}
                     disabled={zoom !== "custom"}
                     onValue={(next) => { setZoom("custom"); setCustom(next); }}
                     onStep={(delta) => {
                       setZoom("custom");
-                      setCustom(String(clampPercent(Number(custom) + delta)));
+                      // 칸 안에서 숫자만 옮긴다. 범위는 적용할 때 코어가 자른다.
+                      setCustom(String(Math.max(spec.minPercent, Math.round((Number(custom) || 0) + delta))));
                     }}
                   />
                 </div>
@@ -227,29 +225,9 @@ export function ZoomDialog({ zoomText, zoomFit, grid, trigger = null }) {
                     {item.id === "grid" ? (
                       <span className="flex flex-wrap items-center gap-2">
                         여러 쪽
-                        <select
-                          aria-label="가로 쪽 수"
-                          className="ui-box h-10 rounded-lg px-2 outline-none"
-                          value={cols}
-                          disabled={shape !== "grid"}
-                          onChange={(event) => setCols(Number(event.target.value))}
-                        >
-                          {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
-                            <option key={count} value={count}>{count}</option>
-                          ))}
-                        </select>
+                        <Choice label="가로 쪽 수" value={String(cols)} options={Array.from({ length: spec.maxGrid }, (_, index) => [String(index + 1), String(index + 1)])} width="4.5em" disabled={shape !== "grid"} onChange={(n) => setCols(Number(n))} />
                         x
-                        <select
-                          aria-label="세로 쪽 수"
-                          className="ui-box h-10 rounded-lg px-2 outline-none"
-                          value={rows}
-                          disabled={shape !== "grid"}
-                          onChange={(event) => setRows(Number(event.target.value))}
-                        >
-                          {Array.from({ length: 8 }, (_, index) => index + 1).map((count) => (
-                            <option key={count} value={count}>{count}</option>
-                          ))}
-                        </select>
+                        <Choice label="세로 쪽 수" value={String(rows)} options={Array.from({ length: spec.maxGrid }, (_, index) => [String(index + 1), String(index + 1)])} width="4.5em" disabled={shape !== "grid"} onChange={(n) => setRows(Number(n))} />
                       </span>
                     ) : item.label}
                   </Radio>

@@ -4,7 +4,6 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
 import { buildDir, coreDir, wasmDir, webDir } from "./paths.mjs";
-
 function cleanWebAssets() {
   return {
     name: "clean-web-assets",
@@ -48,10 +47,12 @@ function fontBaseCss(fontBase) {
   };
 }
 
+// 스레드 wasm 은 교차 출처 격리가 있어야 돈다. WebKit(사파리, iOS 의 모든 브라우저)은 COEP credentialless 를 몰라
+// 격리가 켜지지 않으므로 require-corp 를 쓴다. 다른 출처 자원(VITE_FONT_BASE 의 글꼴 서버 등)은 CORP·CORS 를 보내야 한다.
 const isolation = {
   "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "credentialless",
-  "Document-Isolation-Policy": "isolate-and-credentialless",
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Document-Isolation-Policy": "isolate-and-require-corp",
   "Cross-Origin-Resource-Policy": "cross-origin",
 };
 

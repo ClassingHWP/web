@@ -37,10 +37,11 @@ import { FormatBar } from "./FormatBar.jsx";
 import { useZoomState, ZoomDialog } from "./ZoomDialog.jsx";
 import { bandTab, RibbonFrame, ribbonMenuItems, ribbonTabs } from "./Ribbon.jsx";
 import { FormatDialogs, openFormatDialog } from "./FormatDialogs.jsx";
+import { openTableDialog } from "./TableDialog.jsx";
 import { MobileFooter, MobileHeader, MobileMenuSheet } from "./MobileChrome.jsx";
 import { Toaster } from "./Toast.jsx";
 import { AboutDialog, openAbout } from "./AboutDialog.jsx";
-import { newDocument, notReady, openFile, requestZoom, saveAs, selectionAction, toggleRulers, useBand, useRulersShown, useWide } from "./ui-actions.js";
+import { drawShape, newDocument, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useOverwrite, useRulersShown, useWide } from "./ui-actions.js";
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -60,9 +61,9 @@ const menus = [
     items: [
       { label: "새 문서", Icon: FilePlus, onSelect: newDocument },
       { type: "separator" },
-      { label: "열기", Icon: FolderOpen, shortcut: "Ctrl+O", onSelect: openFile },
+      { label: "열기", Icon: FolderOpen, command: "open", onSelect: openFile },
       { type: "separator" },
-      { label: "저장", Icon: Save, shortcut: "Ctrl+S" },
+      { label: "저장", Icon: Save, command: "save", onSelect: saveAs },
       { label: "다른 이름으로 저장", Icon: SaveAll, onSelect: saveAs },
       { type: "separator" },
       { label: "ClassingHWP 정보", Icon: Info, onSelect: openAbout },
@@ -72,14 +73,14 @@ const menus = [
   {
     label: "편집",
     items: [
-      { label: "되돌리기", Icon: Undo2, shortcut: "Ctrl+Z" },
-      { label: "다시 실행", Icon: Redo2, shortcut: "Ctrl+Y" },
+      { label: "되돌리기", Icon: Undo2, command: "undo", onSelect: () => selectionAction("undo") },
+      { label: "다시 실행", Icon: Redo2, command: "redo", onSelect: () => selectionAction("redo") },
       { type: "separator" },
-      { label: "오려두기", Icon: Scissors, shortcut: "Ctrl+X", onSelect: () => selectionAction("cut") },
-      { label: "복사하기", Icon: Copy, shortcut: "Ctrl+C", onSelect: () => selectionAction("copy") },
-      { label: "붙여넣기", Icon: ClipboardPaste, shortcut: "Ctrl+V", onSelect: () => selectionAction("paste") },
+      { label: "오려두기", Icon: Scissors, command: "cut", onSelect: () => selectionAction("cut") },
+      { label: "복사하기", Icon: Copy, command: "copy", onSelect: () => selectionAction("copy") },
+      { label: "붙여넣기", Icon: ClipboardPaste, command: "paste", onSelect: () => selectionAction("paste") },
       { type: "separator" },
-      { label: "찾기 및 바꾸기", Icon: Search, shortcut: "Ctrl+H" },
+      { label: "찾기 및 바꾸기", Icon: Search },
     ],
   },
   {
@@ -89,23 +90,23 @@ const menus = [
       { label: "격자", Icon: Grid3x3 },
       { label: "쪽 윤곽", Icon: FileText },
       { type: "separator" },
-      { label: "전체 화면", Icon: Scan, shortcut: "F11" },
+      { label: "전체 화면", Icon: Scan },
     ],
   },
   {
     label: "입력",
     items: [
-      { label: "표...", Icon: Table },
-      { label: "그림...", Icon: Image },
-      { label: "글상자", Icon: Type },
+      { label: "표...", Icon: Table, onSelect: openTableDialog },
+      { label: "그림...", Icon: Image, onSelect: pickPicture },
+      { label: "글상자", Icon: Type, onSelect: () => drawShape(4) },
       { label: "문자표...", Icon: Omega },
     ],
   },
   {
     label: "서식",
     items: [
-      { label: "글자 모양...", Icon: ALargeSmall, shortcut: "Alt+L", onSelect: () => openFormatDialog("char") },
-      { label: "문단 모양...", Icon: Pilcrow, shortcut: "Alt+T", onSelect: () => openFormatDialog("para") },
+      { label: "글자 모양...", Icon: ALargeSmall, command: "charDialog", onSelect: () => openFormatDialog("char") },
+      { label: "문단 모양...", Icon: Pilcrow, command: "paraDialog", onSelect: () => openFormatDialog("para") },
       { label: "스타일...", Icon: Palette },
     ],
   },
@@ -115,7 +116,7 @@ const menus = [
       { label: "쪽 나누기", Icon: SeparatorHorizontal },
       { label: "단 나누기", Icon: Columns2 },
       { type: "separator" },
-      { label: "쪽 설정...", Icon: FileCog },
+      { label: "편집 용지...", Icon: FileCog, command: "pageDialog", onSelect: () => openFormatDialog("page") },
       { label: "쪽 번호...", Icon: Hash },
     ],
   },
@@ -163,7 +164,7 @@ function MenuTools({ onUse }) {
     <div className="flex flex-wrap items-center gap-[0.4em] py-[0.15em]">
       <ZoomDialog zoomText={zoomText} zoomFit={zoomFit} grid={grid} />
       <div className="ui-box flex h-[var(--ui-sh)] items-center overflow-hidden rounded-[0.5em]">
-        <button type="button" className="ui-ghost flex h-full w-[var(--ui-sh)] items-center justify-center" aria-label="배율 줄이기" onClick={() => useTool(() => { setZoomFit(""); requestZoom({ step: -10 }); })}>
+        <button type="button" className="ui-ghost flex h-full w-[var(--ui-sh)] items-center justify-center" aria-label="배율 줄이기" onClick={() => useTool(() => { setZoomFit(""); requestZoom({ step: -1 }); })}>
           <Minus className="size-[1em]" />
         </button>
         {zoomFit ? (
@@ -184,7 +185,7 @@ function MenuTools({ onUse }) {
             <span className="pr-[0.3em]">%</span>
           </label>
         )}
-        <button type="button" className="ui-ghost flex h-full w-[var(--ui-sh)] items-center justify-center" aria-label="배율 높이기" onClick={() => useTool(() => { setZoomFit(""); requestZoom({ step: 10 }); })}>
+        <button type="button" className="ui-ghost flex h-full w-[var(--ui-sh)] items-center justify-center" aria-label="배율 높이기" onClick={() => useTool(() => { setZoomFit(""); requestZoom({ step: 1 }); })}>
           <Plus className="size-[1em]" />
         </button>
       </div>
@@ -199,17 +200,17 @@ function MenuTools({ onUse }) {
   );
 }
 
-// 삽입/수정 표시. 지금은 화면 표시만 바뀐다.
+// 삽입/수정 표시. 모드는 코어가 들고 있다.
 function TextModeButton() {
-  const [textMode, setTextMode] = useState("insert");
+  const overwrite = useOverwrite();
   return (
     <button
       type="button"
       className="ui-ghost -mx-[0.35em] rounded-[0.3em] px-[0.35em] py-[0.15em]"
       title="눌러서 삽입/수정 전환"
-      onClick={() => setTextMode((mode) => (mode === "insert" ? "overwrite" : "insert"))}
+      onClick={toggleOverwrite}
     >
-      {textMode === "insert" ? "삽입" : "수정"}
+      {overwrite ? "수정" : "삽입"}
     </button>
   );
 }
@@ -217,7 +218,7 @@ function TextModeButton() {
 const docStateText = { dirty: "저장하지 않은 변경 있음", saved: "변경 내용 저장됨" };
 
 // 시안의 상태 줄. 왼쪽은 한글처럼 쪽·단·줄·칸·구역·삽입/수정·저장 상태, 오른쪽은 보기 도구다.
-// 단·줄·칸·구역은 코어가 캐럿 자리로 알려 준다(noting-caret-status).
+// 단·줄·칸·구역은 코어가 캐럿 자리로 알려 준다(chwp-caret-status).
 // #root 는 세로 flex 라서 order 로 문서 영역 아래에 둔다.
 function StatusBar() {
   const [page, setPage] = useState({ page: 0, count: 0 });
@@ -236,15 +237,15 @@ function StatusBar() {
       setCaret(detail && detail.active ? detail : null);
     };
     const onDoc = (event) => setDocState(event.detail?.state || "clean");
-    window.addEventListener("noting-page-changed", onPage);
-    window.addEventListener("noting-zoom-changed", onPage);
-    window.addEventListener("noting-caret-status", onCaret);
-    window.addEventListener("noting-doc-state", onDoc);
+    window.addEventListener("chwp-page-changed", onPage);
+    window.addEventListener("chwp-zoom-changed", onPage);
+    window.addEventListener("chwp-caret-status", onCaret);
+    window.addEventListener("chwp-doc-state", onDoc);
     return () => {
-      window.removeEventListener("noting-page-changed", onPage);
-      window.removeEventListener("noting-zoom-changed", onPage);
-      window.removeEventListener("noting-caret-status", onCaret);
-      window.removeEventListener("noting-doc-state", onDoc);
+      window.removeEventListener("chwp-page-changed", onPage);
+      window.removeEventListener("chwp-zoom-changed", onPage);
+      window.removeEventListener("chwp-caret-status", onCaret);
+      window.removeEventListener("chwp-doc-state", onDoc);
     };
   }, []);
 
@@ -288,15 +289,41 @@ function RulersEntry({ item }) {
   );
 }
 
+// 단축키 표는 코어가 준다(keyBindings). 여기서는 그 키를 이 플랫폼의 표시(Ctrl·⌘ 등)로 옮기기만 한다.
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
+
+function keyLabel(binding) {
+  if (!binding) return "";
+  const key = String(binding.key || "").replace(/^Key/, "").replace(/^Digit/, "");
+  const parts = [];
+  if (binding.ctrl) parts.push(isMac ? "⌘" : "Ctrl");
+  if (binding.alt) parts.push(isMac ? "⌥" : "Alt");
+  if (binding.shift === 1) parts.push(isMac ? "⇧" : "Shift");
+  parts.push(key);
+  return parts.join(isMac ? "" : "+");
+}
+
+function useKeyBindings() {
+  const [list, setList] = useState(() => (Array.isArray(window.__chwpKeyBindings) ? window.__chwpKeyBindings : []));
+  useEffect(() => {
+    const onList = (event) => setList(Array.isArray(event.detail) ? event.detail : []);
+    window.addEventListener("chwp-key-bindings", onList);
+    return () => window.removeEventListener("chwp-key-bindings", onList);
+  }, []);
+  return list;
+}
+
 function MenuEntry({ item }) {
+  const bindings = useKeyBindings();
   if (item.type === "separator") return <MenubarSeparator className="my-1 bg-[#e5e5e5]" />;
   if (item.type === "rulers") return <RulersEntry item={item} />;
   const Icon = item.Icon;
+  const shortcut = item.command ? keyLabel(bindings.find((binding) => binding.command === item.command)) : "";
   return (
     <MenubarItem disabled={item.disabled} onSelect={item.onSelect || (() => notReady(item.label))} className={menuItemClass}>
       {Icon ? <Icon className="size-[1.1em] text-[#737373]" strokeWidth={2} /> : <span className="size-[1.1em]" />}
       <span className="flex-1">{item.label}</span>
-      {item.shortcut ? <MenubarShortcut className="text-[0.8em] tracking-[0.08em] text-[#737373]">{item.shortcut}</MenubarShortcut> : null}
+      {shortcut ? <MenubarShortcut className="text-[0.8em] tracking-[0.08em] text-[#737373]">{shortcut}</MenubarShortcut> : null}
     </MenubarItem>
   );
 }
@@ -308,7 +335,7 @@ function MenuItems({ menu }) {
 // 고른 리본 탭. 고른 탭을 다시 누르면 리본을 접는다(빈 문자열). 다음에 열 때도 그대로다.
 function storedRibbon() {
   try {
-    const value = localStorage.getItem("noting.ribbon");
+    const value = localStorage.getItem("chwp.ribbon");
     if (value === "" || ribbonTabs.includes(value)) return value;
   } catch {
     // 저장소를 못 쓰면 시안처럼 편집 탭을 연다.
@@ -318,7 +345,7 @@ function storedRibbon() {
 
 function storeRibbon(value) {
   try {
-    localStorage.setItem("noting.ribbon", value);
+    localStorage.setItem("chwp.ribbon", value);
   } catch {
     // 기억하지 못해도 화면은 그대로 쓴다.
   }
@@ -329,6 +356,8 @@ const popClass = "ui-pop toolbar-ui ui-chrome w-72 rounded-lg border-0 p-1 shado
 export function AppMenuBar() {
   const wide = useWide();
   const headerRef = useRef(null);
+  // 탭 칸(이름 + ▾). ▾ 로 연 메뉴를 ▾ 가 아니라 탭 이름 아래에서 시작하게 그 이름 폭만큼 당긴다.
+  const tabGroups = useRef({});
   const [openMenu, setOpenMenu] = useState("");
   const [ribbon, setRibbon] = useState(storedRibbon);
   const [sheet, setSheet] = useState(false);
@@ -426,7 +455,10 @@ export function AppMenuBar() {
                 const selected = shown === menu.label;
                 return (
                   <MenubarMenu key={menu.label} value={menu.label}>
-                    <div className={`flex items-center rounded-[0.45em] ${selected ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
+                    <div
+                      ref={(el) => { tabGroups.current[menu.label] = el; }}
+                      className={`flex items-center rounded-[0.45em] ${selected ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}
+                    >
                       <button
                         type="button"
                         role="tab"
@@ -444,7 +476,11 @@ export function AppMenuBar() {
                         <ChevronDown className="size-[0.8em] text-[#737373]" />
                       </MenubarTrigger>
                     </div>
-                    <MenubarContent className={popClass} sideOffset={6}>
+                    <MenubarContent
+                      className={popClass}
+                      sideOffset={6}
+                      alignOffset={-(tabGroups.current[menu.label]?.firstElementChild?.offsetWidth || 0)}
+                    >
                       <MenuItems menu={menu} />
                     </MenubarContent>
                   </MenubarMenu>

@@ -3,8 +3,8 @@ import path from "node:path";
 import { wasmDir } from "./paths.mjs";
 
 const files = [
-  path.join(wasmDir, "noting.mjs"),
-  path.join(wasmDir, "noting-single.mjs"),
+  path.join(wasmDir, "chwp.mjs"),
+  path.join(wasmDir, "chwp-single.mjs"),
 ];
 const marker = "return new Function(args1,invokerFnBody)";
 const emval = "var invokerFunction=new Function(Object.keys(captures),functionBody)(...Object.values(captures));";

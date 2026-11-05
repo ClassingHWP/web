@@ -84,7 +84,10 @@ function EditChrome() {
   return <AppMenuBar />;
 }
 
-createRoot(document.getElementById("root")).render(
+// 개발 서버가 이 파일을 다시 실행해도(HMR) 같은 루트에 다시 그린다. 루트를 또 만들면 React 가 경고한다.
+const rootElement = document.getElementById("root");
+rootElement.__chwpRoot ??= createRoot(rootElement);
+rootElement.__chwpRoot.render(
   <BrowserRouter basename={routerBase()}>
     <Routes>
       <Route element={<DocumentShell />}>

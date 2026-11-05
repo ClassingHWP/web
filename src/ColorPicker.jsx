@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive, Popover as PopoverPrimitive } from "radix-ui";
 import { ChevronDown, ChevronLeft } from "lucide-react";
-import { useWide } from "./ui-actions.js";
+import { rememberColor, useColorMemory, useWide } from "./ui-actions.js";
 
 // 시안(색 고르기)의 팔레트와 다른 색 대화 상자. 색은 #rrggbb, 빈 문자열은 색 없음이다.
 
@@ -13,26 +13,6 @@ const palette = [
   [["#404040", "진한 회색"], ["#a51c1c", "조금 진한 빨강"], ["#b04209", "조금 진한 주황"], ["#986803", "조금 진한 노랑"], ["#107a38", "조금 진한 초록"], ["#0a6f66", "조금 진한 청록"], ["#1c4ab0", "조금 진한 파랑"], ["#3b34ac", "조금 진한 남색"], ["#6e26b0", "조금 진한 보라"], ["#a41d59", "조금 진한 분홍"]],
   [["#000000", "검정"], ["#6e1313", "진한 빨강"], ["#752c06", "진한 주황"], ["#654502", "진한 노랑"], ["#0b5225", "진한 초록"], ["#064a44", "진한 청록"], ["#123276", "진한 파랑"], ["#282372", "진한 남색"], ["#4a1a75", "진한 보라"], ["#6e143c", "진한 분홍"]],
 ];
-
-const recentKey = "noting.recentColors";
-
-function readRecent() {
-  try {
-    const list = JSON.parse(localStorage.getItem(recentKey) || "[]");
-    return Array.isArray(list) ? list.filter((hex) => /^#[0-9a-f]{6}$/.test(hex)).slice(0, 10) : [];
-  } catch {
-    return [];
-  }
-}
-
-function rememberColor(hex) {
-  if (!/^#[0-9a-f]{6}$/.test(hex)) return;
-  try {
-    localStorage.setItem(recentKey, JSON.stringify([hex, ...readRecent().filter((item) => item !== hex)].slice(0, 10)));
-  } catch {
-    // 기억하지 못해도 고른 색은 그대로 쓴다.
-  }
-}
 
 export function normalHex(value) {
   const text = String(value || "").trim().toLowerCase();
@@ -69,7 +49,8 @@ export function NoColorMark({ className = "size-[1.45em]" }) {
 // 팔레트 몸통. 색 없음(allowNone), 테마 색, 최근 사용한 색, 다른 색… 순서다.
 export function ColorPalette({ value, onPick, allowNone = false, noneLabel = "색 없음", onMore }) {
   const current = normalHex(value);
-  const recent = readRecent();
+  // 최근 색 목록은 코어가 들고 있다.
+  const { recent } = useColorMemory();
   const pick = (hex) => {
     rememberColor(hex);
     onPick(hex);
@@ -281,7 +262,8 @@ function ColorSheet({ open, title, value, allowNone, noneLabel = "색 없음", o
   useEffect(() => {
     if (open) setCustom(false);
   }, [open]);
-  const recent = readRecent();
+  // 최근 색 목록은 코어가 들고 있다.
+  const { recent } = useColorMemory();
   const pick = (hex) => {
     rememberColor(hex);
     onPick(hex);
@@ -388,7 +370,8 @@ export function ColorPopover({ value, onPick, allowNone = false, noneLabel, titl
   }
   return (
     <>
-      <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      {/* 바깥을 투명하게 막는다. 캔버스는 누름을 가로채 바깥 클릭을 알리지 않으니, 바깥 누름이 캔버스로 가지 않고 이 팝오버만 닫는다. */}
+      <PopoverPrimitive.Root modal open={open} onOpenChange={setOpen}>
         <PopoverPrimitive.Trigger asChild>{children}</PopoverPrimitive.Trigger>
         <PopoverPrimitive.Portal>
           <PopoverPrimitive.Content

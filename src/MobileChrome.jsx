@@ -16,23 +16,26 @@ function useKeyboard() {
     const coarse = window.matchMedia("(pointer: coarse)");
     const view = window.visualViewport;
     let focused = false;
-    const keeps = (node) =>
+    // 떠 있는 목록·대화 상자는 서식 막대가 이미 떠 있을 때만 그대로 둔다. 리본에서 연 목록이 서식 막대를 띄우면
+    // 리본이 사라지며 목록도 닫힌다.
+    const keeps = (node, already) =>
       node instanceof Element &&
       (node.id === "viewEditorInput" ||
-        !!node.closest("[data-mobile-format], [data-font-list], [data-radix-popper-content-wrapper], [role='dialog']"));
+        !!node.closest("[data-mobile-format], [data-font-list]") ||
+        (already && !!node.closest("[data-radix-popper-content-wrapper], [role='dialog']")));
     const update = () => {
       const inset = view ? Math.max(0, window.innerHeight - view.height - view.offsetTop) : 0;
       setKeyboard({ open: inset > 120 || (coarse.matches && focused), inset: inset > 120 ? inset : 0 });
     };
     const onFocus = (event) => {
-      focused = keeps(event.target);
+      focused = keeps(event.target, focused);
       update();
     };
     const onBlur = (event) => {
-      if (!keeps(event.relatedTarget)) {
+      if (!keeps(event.relatedTarget, focused)) {
         // 다음 포커스가 정해진 뒤에 본다. 서식 막대 단추로 옮겨 가는 중이면 그대로 둔다.
         window.setTimeout(() => {
-          focused = keeps(document.activeElement);
+          focused = keeps(document.activeElement, focused);
           update();
         }, 0);
       }

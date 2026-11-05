@@ -2,43 +2,43 @@
 // 앱은 같은 op 를 자기 프로세스 통신으로 코어에 넘기면 된다.
 //
 // boot                 wasm 을 올리고 글꼴 목록 요청을 시작한다
-// fonts                글꼴 목록이 코어에 들어갔는지 기다린다
-// prefetchFonts        목록에 있는 글꼴의 주소만 돌려준다. 없는 글꼴은 빼 둔다
-// installFonts         받아 온 글꼴 바이트를 코어에 넣는다
+// fetchFonts           코어가 고른 글꼴 파일을 받아 코어에 넣는다
 // fontFiles            문서가 요청한 글꼴 받기가 끝났는지 본다. 바이트는 도착하는 대로 이미 코어에 들어간다
 // parse                문서 JSON
 // open                 문서 모델을 연다
 // export { format }    열린 문서를 hwp 또는 hwpx 바이트로 내보낸다
-// plan { lineSeg, measured }  우리 조판으로 쪽을 나눈다. lineSeg 면 저장된 줄 높이만 빌린다. 글꼴은 셸이 넣은 뒤의 메모리만 쓴다
+// plan { measured }    우리 조판으로 쪽을 나눈다. 저장된 줄 높이를 빌릴지는 core 가 정한다. 글꼴은 셸이 넣은 뒤의 메모리만 쓴다
 //                       measured 면 lineseg 의 줄 경계만 쓰고 높이는 우리 측정값이다(한글과 견주기용)
 // beginGrind           글꼴을 넣은 뒤, 화면 스레드를 빼고 나머지 스레드가 칸을 굽기 시작한다
-// render { page, pixelHeight, view }  요청한 칸의 글리프만 찍어 픽셀을 돌려준다
-// view { patch }                 스크롤·배율·칸 선택을 코어에 맡기고 그릴 목록을 받는다
+// view { patch }                 화면 크기·배율을 코어에 맡기고 보기 계획을 받는다
+// surface { canvas | remote }    화면을 붙인다. 그리기는 코어 프레임 루프가 한다
+// input { event }                포인터·휠·키 값을 그대로 넘긴다. 무엇을 할지는 코어가 정한다
 
-import { toSfnt } from "../font-sfnt.mjs";
 import { fontBase } from "./font-base.js";
-import createNotingModulePthread from "@wasm/noting.mjs";
-import createNotingModuleSingle from "@wasm/noting-single.mjs";
-import wasmPthreadUrl from "@wasm/noting.wasm?url";
-import wasmSingleUrl from "@wasm/noting-single.wasm?url";
-import dataUrl from "@wasm/noting.data?url";
+import { createScreen2D } from "./screen-2d.js";
+import createChwpModulePthread from "@wasm/chwp.mjs";
+import createChwpModuleSingle from "@wasm/chwp-single.mjs";
+import wasmPthreadUrl from "@wasm/chwp.wasm?url";
+import wasmSingleUrl from "@wasm/chwp-single.wasm?url";
+import dataUrl from "@wasm/chwp.data?url";
 
-let noting = null;
-let notingThreaded = false;
+let chwp = null;
+let chwpThreaded = false;
 let viewCanvas = null;
 let viewSurface = false;
 let fontsReady = Promise.resolve();
-let fontCatalog = {};
-let fontReplace = {};
+const settledFonts = new Map();
 let fontJob = Promise.resolve({ 요청: 0, 받음: 0, ms: 0 });
-const fontLoaded = new Set();
 let captureStdout = false;
 const capturedStdout = [];
 
 function formatError(error) {
   if (!error) return String(error);
   if (typeof error === "string") return error;
-  return error.stack || error.message || String(error);
+  // 사파리 stack 에는 메시지가 없다. 메시지와 자리를 함께 남긴다.
+  const message = error.message || String(error);
+  if (!error.stack) return message;
+  return error.stack.includes(message) ? error.stack : `${message}\n${error.stack}`;
 }
 
 function sendWorkerError(errorData) {
@@ -85,7 +85,7 @@ function onStdout(text) {
         // JSON 이 아니면 아래 로그로 남긴다.
       }
     }
-    if (line.startsWith("[noting 오류]")) {
+    if (line.startsWith("[ClassingHWP 오류]")) {
       self.postMessage({ errorLog: line, log: line });
       continue;
     }
@@ -107,46 +107,26 @@ function readBar(bar) {
   };
 }
 
+// 값과 기본값은 코어가 다 채운다. 여기서는 embind 객체를 보낼 수 있는 꼴로 옮긴다.
 function readCursorStyle(st) {
   if (!st || typeof st !== "object") return null;
-  const fontSize = st.fontSize | 0;
-  return {
-    active: !!st.active,
-    styleId: st.styleId >>> 0,
-    styleName: typeof st.styleName === "string" ? st.styleName : "",
-    styleEngName: typeof st.styleEngName === "string" ? st.styleEngName : "",
-    styleType: typeof st.styleType === "string" ? st.styleType : "PARA",
-    paraShapeId: st.paraShapeId >>> 0,
-    align: typeof st.align === "string" ? st.align : "JUSTIFY",
-    lineSpacingType: typeof st.lineSpacingType === "string" ? st.lineSpacingType : "PERCENT",
-    lineSpacing: st.lineSpacing | 0,
-    charShapeId: st.charShapeId >>> 0,
-    font: typeof st.font === "string" ? st.font : "",
-    fontSwapTo: typeof st.fontSwapTo === "string" ? st.fontSwapTo : "",
-    fontSize,
-    fontSizePt: Number(st.fontSizePt) || (fontSize > 0 ? fontSize / 100 : 10),
-    bold: !!st.bold,
-    italic: !!st.italic,
-    underline: !!st.underline,
-    underlineType: typeof st.underlineType === "string" ? st.underlineType : "NONE",
-    strikeout: !!st.strikeout,
-    color: typeof st.color === "string" ? st.color : "#000000",
-    caret: readCaretStatus(st.caret),
-  };
+  return { ...st, fontSizeIn: { ...(st.fontSizeIn || {}) }, mixed: readMixed(st.mixed), caret: readCaretStatus(st.caret) };
 }
 
-// 상태 줄의 단·줄·칸·구역.
+// 블록 안에서 섞인 값. 셸은 그 칸을 비운다.
+function readMixed(mixed) {
+  const out = {};
+  if (!mixed || typeof mixed !== "object") return out;
+  for (const key of ["style", "font", "fontSize", "bold", "italic", "underline", "strikeout", "color", "align", "lineSpacing"]) {
+    out[key] = !!mixed[key];
+  }
+  return out;
+}
+
+// 상태 줄의 단·줄·칸·구역·삽입/수정. 값은 코어가 채운다.
 function readCaretStatus(st) {
   if (!st || typeof st !== "object") return null;
-  return {
-    active: !!st.active,
-    section: st.section | 0,
-    sectionCount: st.sectionCount | 0,
-    column: st.column | 0,
-    line: st.line | 0,
-    char: st.char | 0,
-    band: st.band | 0,
-  };
+  return { ...st };
 }
 
 function readPlan(plan) {
@@ -193,10 +173,8 @@ function readPlan(plan) {
     percent: plan.percent | 0,
     fitPage: !!plan.fitPage,
     fitWidth: !!plan.fitWidth,
-    zoomMode: plan.fitPage ? "fitPage" : (plan.fitWidth ? "fitWidth" : "percent"),
-    zoomLabel: typeof plan.zoomLabel === "string"
-      ? plan.zoomLabel
-      : (plan.fitPage ? "쪽 맞춤" : (plan.fitWidth ? "폭 맞춤" : `${plan.percent | 0}%`)),
+    zoomMode: plan.zoomMode,
+    zoomLabel: plan.zoomLabel,
     contentW: plan.contentW | 0,
     contentH: plan.contentH | 0,
     scrollX: plan.scrollX | 0,
@@ -262,19 +240,8 @@ function makeLocateFile(targetWasmUrl) {
   };
 }
 
-function fontUrl(kind, name) {
-  return fontBase + kind + "/" + encodeURIComponent(name);
-}
-
-// 목록에 있는 파일만 주소가 있다. 없는 글꼴은 요청하지 않는다.
-function fontFileUrl(face) {
-  const named = fontCatalog[face];
-  if (typeof named !== "string" || !named) return "";
-  if (named.startsWith("metrics/")) return fontUrl("metrics", named.slice("metrics/".length));
-  if (named.startsWith("full/")) return fontUrl("full", named.slice("full/".length));
-  // 막힌 글꼴의 대역. 파일은 full 폴더에 같이 있다.
-  if (named.startsWith("standin/")) return fontUrl("full", named.slice("standin/".length));
-  return "";
+function fontUrl(folder, name) {
+  return fontBase + folder + "/" + encodeURIComponent(name);
 }
 
 function startDocumentFonts(faces) {
@@ -282,78 +249,40 @@ function startDocumentFonts(faces) {
   fontJob = fontsReady.then(() => fetchDocumentFonts(faces));
 }
 
+// 무엇을 받을지(파일 묶기, 대신 받을 글꼴)는 코어가 정한다. 여기서는 받아서 넘기기만 한다.
 function fetchDocumentFonts(faces) {
-  const jobs = fontJobsFor(faces);
+  const jobs = chwp.fontFetchPlan(faces ?? []);
   const started = Date.now();
   if (!jobs.length) return Promise.resolve({ 요청: 0, 받음: 0, ms: 0 });
   let got = 0;
+  // 다 받아 풀고 문서에 적용하면 코어가 onFontsSettled(batch) 로 알린다.
+  const settled = new Promise((resolve) => settledFonts.set(jobs[0].batch, resolve));
   return Promise.all(jobs.map(async (job) => {
+    const url = fontUrl(job.folder, job.file);
     try {
-      const response = await fetch(job.url);
+      const response = await fetch(url);
       if (!response.ok) {
-        console.log("[noting 오류:font-fetch]", job.face, job.url, response.status);
+        console.log("[ClassingHWP 오류:font-fetch]", job.face, url, response.status);
+        chwp.fontFetchFailed(job.id);
         return;
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length < 12) return;
-      const faces = job.faces.filter((face) => face && !fontLoaded.has(face));
-      if (faces.length) {
-        // 압축을 풀고 등록하는 일은 코어 스레드가 한다. 끝나기는 아래 waitFontDecodes 가 기다린다.
-        noting.decodeFont(faces, bytes);
-        for (const face of faces) fontLoaded.add(face);
-      }
-      job.installed = true;
+      // 바이트가 쓸 만한지, 압축을 풀고 등록하는 일은 코어가 한다.
+      chwp.fontFetched(job.id, bytes);
       got += 1;
     } catch (error) {
-      console.log("[noting 오류:font-fetch]", job.face || job.url, formatError(error));
+      console.log("[ClassingHWP 오류:font-fetch]", job.face || url, formatError(error));
+      chwp.fontFetchFailed(job.id);
     }
-  })).then(waitFontDecodes).then(() => {
-    applyFontReplacements(jobs);
-    return { 요청: jobs.length, 받음: got, ms: Date.now() - started };
+  })).then(() => settled).then(async () => {
+    const report = { 요청: jobs.length, 받음: got, ms: Date.now() - started };
+    // 받은 글꼴에 없는 글자가 있으면 core 가 대체 글꼴 이름을 준다. 그것까지 받은 뒤 끝낸다.
+    // 몇 번 되물을지는 core 가 센다(DocSession::kFontGapRounds). 다 물으면 빈 목록을 준다.
+    const gaps = Array.from(chwp.fontGapFaces?.() ?? []);
+    if (!gaps.length) return report;
+    const more = await fetchDocumentFonts(gaps);
+    return { 요청: report.요청 + more.요청, 받음: report.받음 + more.받음, ms: Date.now() - started };
   });
-}
-
-// 단일 스레드 코어는 decodeFont 안에서 등록까지 끝내므로 바로 넘어간다.
-async function waitFontDecodes() {
-  while (noting.fontDecodesPending() > 0) {
-    await new Promise((resolve) => setTimeout(resolve, 4));
-  }
-}
-
-function fontJobsFor(faces) {
-  const jobs = [];
-  const seen = new Set();
-  const byUrl = new Map();
-  const requested = [...(faces ?? []), "함초롬바탕", "함초롬돋움"];
-  for (const face of requested) {
-    if (!face || seen.has(face)) continue;
-    const next = typeof fontReplace[face] === "string" ? fontReplace[face] : "";
-    const replaced = next && next !== face;
-    const fetchFace = replaced ? next : face;
-    if (!replaced && fontLoaded.has(face)) continue;
-    seen.add(face);
-    const url = fontFileUrl(fetchFace);
-    if (!url) continue;
-    let entry = byUrl.get(url);
-    if (!entry) {
-      entry = { face: fetchFace, faces: [fetchFace], url, replacements: [] };
-      byUrl.set(url, entry);
-      jobs.push(entry);
-    } else if (!entry.faces.includes(fetchFace)) {
-      entry.faces.push(fetchFace);
-    }
-    if (replaced) entry.replacements.push({ from: face, to: next });
-  }
-  return jobs;
-}
-
-function applyFontReplacements(jobs) {
-  for (const job of jobs) {
-    if (!job.installed) continue;
-    for (const swap of job.replacements || []) {
-      noting.replaceFontFace(swap.from, swap.to);
-    }
-  }
 }
 
 async function loadFontCatalog() {
@@ -373,21 +302,19 @@ async function loadFontCatalog() {
     }
   }
   try {
-    fontCatalog = catalog;
-    noting.setFontCatalog(JSON.stringify(catalog));
+    chwp.setFontCatalog(JSON.stringify(catalog));
     const swapResponse = await fetch(fontBase + "license-swap.json");
     if (swapResponse.ok) {
       const swaps = await swapResponse.json();
-      if (swaps && typeof swaps === "object" && !Array.isArray(swaps)) noting.setFontLicenseSwaps(JSON.stringify(swaps));
+      if (swaps && typeof swaps === "object" && !Array.isArray(swaps)) chwp.setFontLicenseSwaps(JSON.stringify(swaps));
     }
     const replaceResponse = await fetch(fontBase + "replace.json");
     if (replaceResponse.ok) {
       const listed = await replaceResponse.json();
-      if (listed && typeof listed === "object" && !Array.isArray(listed)) fontReplace = listed;
+      if (listed && typeof listed === "object" && !Array.isArray(listed)) chwp.setFontReplacements(JSON.stringify(listed));
     }
   } catch (error) {
-    fontCatalog = {};
-    noting.setFontCatalog("{}");
+    chwp.setFontCatalog("{}");
     console.warn("font catalog", error);
   }
   return Date.now() - started;
@@ -407,19 +334,19 @@ async function boot() {
   });
   if (canUseWasmThreads()) {
     try {
-      noting = await createNotingModulePthread(makeModuleOpts(wasmPthreadUrl));
-      notingThreaded = true;
+      chwp = await createChwpModulePthread(makeModuleOpts(wasmPthreadUrl));
+      chwpThreaded = true;
     } catch (error) {
-      onStdout(`[noting] 멀티스레드 부팅 실패 → 단일 스레드로 전환 (${formatError(error)})`);
-      noting = await createNotingModuleSingle(makeModuleOpts(wasmSingleUrl));
-      notingThreaded = false;
+      onStdout(`[ClassingHWP] 멀티스레드 부팅 실패 → 단일 스레드로 전환 (${formatError(error)})`);
+      chwp = await createChwpModuleSingle(makeModuleOpts(wasmSingleUrl));
+      chwpThreaded = false;
     }
   } else {
-    onStdout("[noting] SharedArrayBuffer 미지원 환경 → 단일 스레드 WASM 폴백");
-    noting = await createNotingModuleSingle(makeModuleOpts(wasmSingleUrl));
-    notingThreaded = false;
+    onStdout("[ClassingHWP] SharedArrayBuffer 미지원 환경 → 단일 스레드 WASM 폴백");
+    chwp = await createChwpModuleSingle(makeModuleOpts(wasmSingleUrl));
+    chwpThreaded = false;
   }
-  noting.onFontFaces = (faces) => {
+  chwp.onFontFaces = (faces) => {
     const names = [];
     const count = faces?.length | 0;
     for (let i = 0; i < count; i += 1) {
@@ -429,31 +356,27 @@ async function boot() {
     startDocumentFonts(names);
     self.postMessage({ fontFaces: names });
   };
-  noting.onCamera = (x, y, percent, coasting, pinching, page, pageCount, fitPage, fitWidth, viewW, viewH, maxScrollX, maxScrollY, dpr) => {
-    self.postMessage({
-      camera: {
-        scrollX: x | 0,
-        scrollY: y | 0,
-        percent: percent | 0,
-        fitPage: !!fitPage,
-        fitWidth: !!fitWidth,
-        zoomMode: fitPage ? "fitPage" : (fitWidth ? "fitWidth" : "percent"),
-        zoomLabel: fitPage ? "쪽 맞춤" : (fitWidth ? "폭 맞춤" : `${percent | 0}%`),
-        coasting: !!coasting,
-        pinching: !!pinching,
-        page: page | 0,
-        pageCount: pageCount | 0,
-        viewW: viewW | 0,
-        viewH: viewH | 0,
-        maxScrollX: maxScrollX | 0,
-        maxScrollY: maxScrollY | 0,
-        dpr: Number(dpr) > 0 ? Number(dpr) : 1,
-      },
-    });
+  // 카메라 값과 배율 글은 core 가 채운다. 그대로 넘긴다.
+  chwp.onFontsSettled = (batch) => {
+    const resolve = settledFonts.get(batch);
+    settledFonts.delete(batch);
+    resolve?.();
+  };
+  chwp.onCamera = (camera) => {
+    self.postMessage({ camera });
+  };
+  // 2D 화면: 코어가 정한 그림 목록을 캔버스 2D 로 옮긴다. 캔버스가 이 워커에 있으면 여기서 그리고,
+  // 원격 화면이면 메인 스레드로 넘긴다.
+  const drawScreen2D = createScreen2D();
+  chwp.onScreenOps = (frame) => {
+    if (viewCanvas) return drawScreen2D(viewCanvas, frame);
+    const transfers = [frame.ops, frame.path, frame.drops];
+    for (const item of frame.uploads) transfers.push(item.pixels);
+    self.postMessage({ screenOps: frame }, transfers);
   };
   const coreMs = Date.now() - started;
   fontsReady = loadFontCatalog();
-  return { coreMs, threaded: notingThreaded };
+  return { coreMs, threaded: chwpThreaded };
 }
 
 self.onmessage = async (event) => {
@@ -464,43 +387,15 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result });
       return;
     }
-    if (!noting) throw new Error("코어가 아직 준비되지 않았습니다.");
-    if (msg.op === "fonts") {
-      const ms = await fontsReady;
-      self.postMessage({ id: msg.id, ok: true, result: { ms } });
-      return;
-    }
-    if (msg.op === "prefetchFonts") {
+    if (!chwp) throw new Error(`코어가 아직 준비되지 않았습니다(${msg.op}).`);
+    if (msg.op === "fetchFonts") {
       await fontsReady;
-      self.postMessage({ id: msg.id, ok: true, result: fontJobsFor(msg.faces) });
+      self.postMessage({ id: msg.id, ok: true, result: await fetchDocumentFonts(msg.faces || []) });
       return;
     }
     if (msg.op === "beginGrind") {
-      noting.beginGrind();
+      chwp.beginGrind();
       self.postMessage({ id: msg.id, ok: true, result: true });
-      return;
-    }
-    if (msg.op === "replaceFontFace") {
-      const changed = noting.replaceFontFace(String(msg.from || ""), String(msg.to || "")) | 0;
-      self.postMessage({ id: msg.id, ok: true, result: changed });
-      return;
-    }
-    if (msg.op === "installFonts") {
-      let loaded = 0;
-      for (const item of msg.files || []) {
-        const bytes = item?.bytes instanceof Uint8Array ? item.bytes : new Uint8Array(item?.bytes || []);
-        const names = Array.isArray(item?.faces) && item.faces.length ? item.faces : (item?.face ? [item.face] : []);
-        if (!names.length || bytes.length < 12) continue;
-        let sentBytes = false;
-        for (const face of names) {
-          if (!face || fontLoaded.has(face)) continue;
-          noting.loadFont(face, sentBytes ? new Uint8Array(0) : bytes);
-          sentBytes = true;
-          fontLoaded.add(face);
-          loaded += 1;
-        }
-      }
-      self.postMessage({ id: msg.id, ok: true, result: loaded });
       return;
     }
     if (msg.op === "fontFiles") {
@@ -508,67 +403,13 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result });
       return;
     }
-    if (msg.op === "ensurePageSpans") {
-      self.postMessage({ id: msg.id, ok: true, result: noting.ensurePageSpans(msg.page | 0) });
-      return;
-    }
-    if (msg.op === "pageFaces") {
-      self.postMessage({ id: msg.id, ok: true, result: noting.pageFaces(msg.page | 0) });
-      return;
-    }
-    if (msg.op === "documentFaces") {
-      self.postMessage({ id: msg.id, ok: true, result: noting.documentFaces() });
-      return;
-    }
-    if (msg.op === "warmDocument") {
-      await fontsReady;
-      await fontJob;
-      self.postMessage({ id: msg.id, ok: true, result: noting.warmDocument(msg.percent | 0) });
-      return;
-    }
-    if (msg.op === "warmGlyphs") {
-      await fontsReady;
-      await fontJob;
-      self.postMessage({ id: msg.id, ok: true, result: noting.warmGlyphs(msg.page | 0, msg.percent | 0) });
-      return;
-    }
-    if (msg.op === "preparePage") {
-      await fontsReady;
-      const step = noting.preparePage(msg.page | 0, msg.percent | 0, msg.focusY | 0);
-      self.postMessage({
-        id: msg.id,
-        ok: true,
-        result: { made: step.made | 0, done: !!step.done },
-      });
-      return;
-    }
-    if (msg.op === "idle") {
-      await fontsReady;
-      const step = noting.idle(msg.patch || {});
-      self.postMessage({
-        id: msg.id,
-        ok: true,
-        result: {
-          more: !!step.more,
-          screen: !!step.screen,
-          made: step.made | 0,
-          view: readPlan(step.view),
-        },
-      });
-      return;
-    }
-    if (msg.op === "readyPages") {
-      noting.setReadyPages(msg.pages || []);
-      self.postMessage({ id: msg.id, ok: true, result: true });
-      return;
-    }
     if (msg.op === "parse") {
-      const json = noting.parse(msg.bytes, !!msg.pretty, !!msg.lineSegs);
+      const json = chwp.parse(msg.bytes, !!msg.pretty, !!msg.lineSegs);
       self.postMessage({ id: msg.id, ok: true, result: json });
       return;
     }
     if (msg.op === "open" || msg.op === "new") {
-      const info = msg.op === "new" ? noting.newDocument() : noting.openDocument(msg.bytes);
+      const info = msg.op === "new" ? chwp.newDocument() : chwp.openDocument(msg.bytes);
       msg.bytes = null;
       const faces = [];
       const list = info?.faces;
@@ -583,40 +424,58 @@ self.onmessage = async (event) => {
           ok: info ? !!info.ok : true,
           error: typeof info?.error === "string" ? info.error : "",
           faces,
-          cursorStyle: readCursorStyle(noting.cursorStyle()),
+          docState: String(info?.docState || ""),
+          name: String(info?.name || ""),
+          cursorStyle: readCursorStyle(chwp.cursorStyle()),
         },
       });
       return;
     }
     if (msg.op === "trimCaches") {
-      noting.trimCaches(msg.level | 0);
+      chwp.trimCaches(msg.level | 0);
       self.postMessage({ id: msg.id, ok: true, result: true });
       return;
     }
     if (msg.op === "setCacheBudget") {
-      const ok = noting.setCacheBudget(String(msg.name || ""), Number(msg.bytes));
+      const ok = chwp.setCacheBudget(String(msg.name || ""), Number(msg.bytes));
       self.postMessage({ id: msg.id, ok: true, result: !!ok });
       return;
     }
-    if (msg.op === "cacheUsage") {
-      self.postMessage({ id: msg.id, ok: true, result: JSON.parse(noting.cacheUsage()) });
+    if (msg.op === "memory") {
+      self.postMessage({
+        id: msg.id,
+        ok: true,
+        result: { heapBytes: chwp.memoryBytes(), inUseBytes: chwp.memoryInUse(), report: JSON.parse(chwp.memoryReport()) },
+      });
       return;
     }
-    if (msg.op === "cursorStyle") {
-      self.postMessage({ id: msg.id, ok: true, result: readCursorStyle(noting.cursorStyle()) });
+    if (msg.op === "frameStats") {
+      const stats = JSON.parse(chwp.frameStats());
+      stats.heapBytes = chwp.memoryBytes();
+      stats.inUseBytes = chwp.memoryInUse();
+      self.postMessage({ id: msg.id, ok: true, result: stats });
+      return;
+    }
+    if (msg.op === "cacheUsage") {
+      self.postMessage({ id: msg.id, ok: true, result: JSON.parse(chwp.cacheUsage()) });
       return;
     }
     if (msg.op === "hover") {
-      self.postMessage({ id: msg.id, ok: true, result: String(noting.hoverCursor(Number(msg.x) || 0, Number(msg.y) || 0)) });
+      self.postMessage({ id: msg.id, ok: true, result: String(chwp.hoverCursor(Number(msg.x) || 0, Number(msg.y) || 0)) });
       return;
     }
-    if (msg.op === "export") {
-      const bytes = noting.exportDocument(String(msg.format || ""));
+    if (msg.op === "save") {
+      const saved = chwp.saveDocument(String(msg.name || ""));
+      const bytes = saved?.bytes;
       if (!bytes || typeof bytes.length !== "number" || bytes.length === 0) {
-        throw new Error("저장에 실패했습니다.");
+        throw new Error(String(saved?.error || "") || "저장에 실패했습니다.");
       }
       const copy = new Uint8Array(bytes);
-      self.postMessage({ id: msg.id, ok: true, result: copy }, [copy.buffer]);
+      self.postMessage({
+        id: msg.id,
+        ok: true,
+        result: { bytes: copy, name: String(saved.name), docState: String(saved.docState || "") },
+      }, [copy.buffer]);
       return;
     }
     if (msg.op === "plan") {
@@ -625,54 +484,13 @@ self.onmessage = async (event) => {
       capturedStdout.length = 0;
       let json = "";
       try {
-        noting.setMeasuredLineHeight(!!msg.measured);
-        json = noting.planDocument(!!msg.lineSeg);
+        chwp.setMeasuredLineHeight(!!msg.measured);
+        json = chwp.planDocument();
       } finally {
         captureStdout = false;
       }
       const detail = capturedStdout.splice(0);
       self.postMessage({ id: msg.id, ok: true, result: { json, detail } });
-      return;
-    }
-    function caretResult(place) {
-      return place && place.hit
-        ? {
-          hit: true,
-          x: place.x | 0,
-          y: place.y | 0,
-          h: place.h | 0,
-          page: place.page | 0,
-          story: place.story | 0,
-          para: place.para | 0,
-          offset: place.offset | 0,
-          cursorStyle: readCursorStyle(place.cursorStyle),
-        }
-        : { hit: false };
-    }
-    if (msg.op === "caret") {
-      const place = noting.caretAt(msg.page | 0, msg.x | 0, msg.y | 0);
-      self.postMessage({ id: msg.id, ok: true, result: caretResult(place) });
-      return;
-    }
-    if (msg.op === "caretStory") {
-      const place = noting.caretInStory(msg.page | 0, msg.x | 0, msg.y | 0, msg.story | 0);
-      self.postMessage({ id: msg.id, ok: true, result: caretResult(place) });
-      return;
-    }
-    if (msg.op === "block") {
-      const marks = noting.blockMarks(msg.story | 0, msg.aPara | 0, msg.aOff | 0, msg.bPara | 0, msg.bOff | 0);
-      const boxes = [];
-      for (let i = 0; i < marks.length; i += 1) {
-        const mark = marks[i];
-        boxes.push({
-          page: mark.page | 0,
-          x: mark.x | 0,
-          y: mark.y | 0,
-          w: mark.w | 0,
-          h: mark.h | 0,
-        });
-      }
-      self.postMessage({ id: msg.id, ok: true, result: boxes });
       return;
     }
     if (msg.op === "surface") {
@@ -683,52 +501,33 @@ self.onmessage = async (event) => {
           // ignore
         }
       }
-      viewCanvas = msg.canvas;
-      noting.canvas = msg.canvas;
+      // 원격 화면이면 캔버스가 없다. 코어가 정한 2D 그림 목록을 메인 스레드로 보낸다.
+      viewCanvas = msg.remote ? null : msg.canvas;
+      chwp.canvas = viewCanvas;
       // 이 빌드의 WebGL 은 "#canvas" 를 document 에서 찾는다. 워커에는 문서가 없다.
       if (!globalThis.document) {
         globalThis.document = {
           querySelector(selector) {
-            return selector === "#canvas" ? noting.canvas : null;
+            return selector === "#canvas" ? chwp.canvas : null;
           },
           getElementById(id) {
-            return id === "canvas" ? noting.canvas : null;
+            return id === "canvas" ? chwp.canvas : null;
           },
         };
       }
-      viewSurface = !!noting.attachScreen();
-      const deadline = performance.now() + 8000;
-      while (viewSurface && !noting.screenReady() && performance.now() < deadline) {
+      // 장치가 붙기를 기다린다. 언제 포기할지는 코어가 정한다(0 대기, 1 준비, 2 실패).
+      chwp.attachScreen(!!msg.remote);
+      let state = chwp.screenAttachState();
+      while (state === 0) {
         await new Promise((resolve) => setTimeout(resolve, 16));
+        state = chwp.screenAttachState();
       }
-      viewSurface = viewSurface && !!noting.screenReady();
+      viewSurface = state === 1;
       self.postMessage({ id: msg.id, ok: true, result: viewSurface });
       return;
     }
-    if (msg.op === "present") {
-      const w = msg.w | 0;
-      const h = msg.h | 0;
-      // 캔버스가 붙으면 프레임 루프가 최종 화면을 낸다. 여기서 다시 그리면 제출이 두 번이다.
-      if (viewSurface) {
-        self.postMessage({ id: msg.id, ok: true, result: { ok: true, more: false } });
-        return;
-      }
-      if (!viewCanvas || w <= 0 || h <= 0) {
-        self.postMessage({ id: msg.id, ok: true, result: false });
-        return;
-      }
-      if (viewCanvas.width !== w || viewCanvas.height !== h) {
-        viewCanvas.width = w;
-        viewCanvas.height = h;
-      }
-      const ok = noting.presentView(w, h, msg.scrollX | 0, msg.scrollY | 0, msg.layoutZoom | 0, !!msg.dragging);
-      const more = ok && noting.glyphMasksPending();
-      if (!ok) self.postMessage({ log: `화면 표시 실패 ${w}×${h}` });
-      self.postMessage({ id: msg.id, ok: true, result: { ok: !!ok, more: !!more } });
-      return;
-    }
     if (msg.op === "input") {
-      const camera = noting.inputEvent(msg.event || {});
+      const camera = chwp.inputEvent(msg.event || {});
       self.postMessage({
         id: msg.id,
         ok: true,
@@ -740,10 +539,8 @@ self.onmessage = async (event) => {
           percent: camera.percent | 0,
           fitPage: !!camera.fitPage,
           fitWidth: !!camera.fitWidth,
-          zoomMode: camera.fitPage ? "fitPage" : (camera.fitWidth ? "fitWidth" : "percent"),
-          zoomLabel: typeof camera.zoomLabel === "string"
-            ? camera.zoomLabel
-            : (camera.fitPage ? "쪽 맞춤" : (camera.fitWidth ? "폭 맞춤" : `${camera.percent | 0}%`)),
+          zoomMode: camera.zoomMode,
+          zoomLabel: camera.zoomLabel,
           gridMode: typeof camera.gridMode === "string" ? camera.gridMode : "auto",
           gridCols: camera.gridCols | 0,
           gridRows: camera.gridRows | 0,
@@ -752,6 +549,11 @@ self.onmessage = async (event) => {
           pageStepY: camera.pageStepY | 0,
           page: camera.page | 0,
           pageCount: camera.pageCount | 0,
+          ownsScroll: !!camera.ownsScroll,
+          settled: !!camera.settled,
+          needsTick: !!camera.needsTick,
+          tapSlop: Number(camera.tapSlop) || 0,
+          rulersWanted: !!camera.rulersWanted,
           scrollChanged: !!camera.scrollChanged,
           zoomChanged: !!camera.zoomChanged,
           coasting: !!camera.coasting,
@@ -762,6 +564,9 @@ self.onmessage = async (event) => {
           panning: !!camera.panning,
           select: !!camera.select,
           selectPhase: camera.selectPhase | 0,
+          edited: !!camera.edited,
+          docState: typeof camera.docState === "string" ? camera.docState : "",
+          needsFontSwap: !!camera.needsFontSwap,
           pinTap: !!camera.pinTap,
           active: !!camera.active,
           caret: !!camera.caret,
@@ -782,7 +587,6 @@ self.onmessage = async (event) => {
       const count = list ? list.length : 0;
       for (let i = 0; i < count; i += 1) {
         const image = list[i];
-        if (viewSurface && !image.caret) continue;
         const view = new Uint8Array(image.pixels);
         const pixels = view.slice();
         transfers.push(pixels.buffer);
@@ -821,6 +625,9 @@ self.onmessage = async (event) => {
           handled: !!packed?.handled,
           documentChanged: !!packed?.documentChanged,
           fullInvalidation: !!packed?.fullInvalidation,
+          canUndo: !!packed?.canUndo,
+          canRedo: !!packed?.canRedo,
+          docState: typeof packed?.docState === "string" ? packed.docState : "",
           composing: !!packed?.composing,
           needsFontSwap: !!packed?.needsFontSwap,
           dirtySection: packed?.dirtySection | 0,
@@ -848,7 +655,7 @@ self.onmessage = async (event) => {
     }
     if (msg.op === "pointer") {
       await fontsReady;
-      const packed = noting.pointerEvent(msg.kind | 0, msg.page | 0, msg.x | 0, msg.y | 0, msg.percent | 0);
+      const packed = chwp.pointerEvent(msg.kind | 0, msg.page | 0, msg.x | 0, msg.y | 0, msg.percent | 0);
       const { images, transfers } = unpackSelectionImages(packed);
       self.postMessage({
         id: msg.id,
@@ -865,85 +672,178 @@ self.onmessage = async (event) => {
       }, transfers);
       return;
     }
+    if (msg.op === "editField") {
+      await fontsReady;
+      const packed = chwp.editField(msg.event || {});
+      const field = { ...packed.field };
+      if (!packed.edited) {
+        self.postMessage({ id: msg.id, ok: true, result: { field, edit: null } });
+        return;
+      }
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result: { field, edit: result } }, transfers);
+      return;
+    }
     if (msg.op === "editText") {
       await fontsReady;
-      const packed = noting.editText(String(msg.text ?? ""), !!msg.composing);
+      const packed = chwp.editText(String(msg.text ?? ""), !!msg.composing);
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
-    if (msg.op === "editCommit") {
+    if (msg.op === "setDrawTool") {
+      chwp.setDrawTool(msg.tool | 0);
+      self.postMessage({ id: msg.id, ok: true, result: null });
+      return;
+    }
+    if (msg.op === "editInsertPicture") {
       await fontsReady;
-      const packed = noting.editCommit();
+      const packed = chwp.editInsertPicture(msg.bytes);
+      msg.bytes = null;
       const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editInsertTable") {
+      await fontsReady;
+      const packed = chwp.editInsertTable(msg.rows | 0, msg.cols | 0);
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editUndo" || msg.op === "editRedo") {
+      await fontsReady;
+      const packed = msg.op === "editUndo" ? chwp.editUndo() : chwp.editRedo();
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editDeleteSelection") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editDeleteSelection());
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "editKey") {
       await fontsReady;
-      const packed = noting.editKey(msg.key | 0, !!msg.shift, !!msg.ctrl, !!msg.alt);
+      const packed = chwp.editKey(msg.key | 0, !!msg.shift, !!msg.ctrl, !!msg.alt);
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "pickableFonts") {
       await fontsReady;
-      self.postMessage({ id: msg.id, ok: true, result: noting.pickableFonts() });
+      self.postMessage({ id: msg.id, ok: true, result: chwp.pickableFonts() });
       return;
     }
     if (msg.op === "formatFields") {
       await fontsReady;
-      self.postMessage({ id: msg.id, ok: true, result: noting.formatFields() });
+      self.postMessage({ id: msg.id, ok: true, result: chwp.formatFields() });
       return;
     }
     if (msg.op === "licenseFontSwaps") {
       await fontsReady;
-      self.postMessage({ id: msg.id, ok: true, result: noting.licenseFontSwaps() });
+      self.postMessage({ id: msg.id, ok: true, result: chwp.licenseFontSwaps() });
+      return;
+    }
+    if (msg.op === "dropPendingInsert") {
+      chwp.dropPendingInsert();
+      self.postMessage({ id: msg.id, ok: true, result: true });
       return;
     }
     if (msg.op === "editSwapFonts") {
       await fontsReady;
-      const packed = noting.editSwapFonts(msg.chosen && typeof msg.chosen === "object" ? msg.chosen : {});
+      const packed = chwp.editSwapFonts(msg.chosen && typeof msg.chosen === "object" ? msg.chosen : {});
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "pageSetupFields") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.pageSetupFields() });
+      return;
+    }
+    if (msg.op === "editPageSetup") {
+      await fontsReady;
+      const packed = chwp.editPageSetup(msg.patch || {}, !!msg.whole);
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "setFontSwapPreferences") {
+      chwp.setFontSwapPreferences(String(msg.json || "{}"));
+      self.postMessage({ id: msg.id, ok: true, result: true });
+      return;
+    }
+    if (msg.op === "setRecentColors" || msg.op === "rememberColor") {
+      const memory = msg.op === "rememberColor"
+        ? chwp.rememberColor(String(msg.hex || ""))
+        : chwp.setRecentColors(String(msg.saved || ""));
+      self.postMessage({ id: msg.id, ok: true, result: { recent: [...memory.recent], pen: memory.pen, saved: memory.saved } });
+      return;
+    }
+    if (msg.op === "fontSwapPreferences") {
+      self.postMessage({ id: msg.id, ok: true, result: chwp.fontSwapPreferences() });
+      return;
+    }
+    if (msg.op === "styleNames") {
+      const list = chwp.styleNames();
+      const out = [];
+      for (let i = 0; i < list.length; i++) out.push(String(list[i]));
+      self.postMessage({ id: msg.id, ok: true, result: out });
+      return;
+    }
+    if (msg.op === "fieldRules") {
+      const list = chwp.fieldRules();
+      const out = [];
+      for (let i = 0; i < list.length; i++) {
+        const rule = { ...list[i] };
+        if (rule.inputTypes) rule.inputTypes = Array.from(rule.inputTypes, String);
+        out.push(rule);
+      }
+      self.postMessage({ id: msg.id, ok: true, result: out });
+      return;
+    }
+    if (msg.op === "zoomDialogSpec") {
+      self.postMessage({ id: msg.id, ok: true, result: JSON.parse(chwp.zoomDialogSpec()) });
+      return;
+    }
+    if (msg.op === "keyBindings") {
+      const list = chwp.keyBindings();
+      const out = [];
+      for (let i = 0; i < list.length; i++) out.push({ ...list[i] });
+      self.postMessage({ id: msg.id, ok: true, result: out });
+      return;
+    }
+    if (msg.op === "formatView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.formatDialogView(msg.kind | 0, msg.patch || {}) });
+      return;
+    }
+    if (msg.op === "formatPreview") {
+      await fontsReady;
+      const frame = chwp.formatDialogPreview(msg.kind | 0, msg.patch || {}, msg.w | 0, msg.h | 0);
+      const pixels = new Uint8Array(frame.pixels).slice();
+      self.postMessage({ id: msg.id, ok: true, result: { width: frame.width, height: frame.height, pixels } }, [pixels.buffer]);
+      return;
+    }
+    if (msg.op === "editFormatDialog") {
+      await fontsReady;
+      const packed = chwp.editFormatDialog(msg.kind | 0, msg.patch || {}, !!msg.whole);
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "editStyle") {
       await fontsReady;
-      const packed = noting.editStyle(msg.patch || {});
+      const packed = chwp.editStyle(msg.patch || {});
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "view") {
-      const plan = noting.viewApply(msg.patch || {});
+      const plan = chwp.viewApply(msg.patch || {});
       self.postMessage({ id: msg.id, ok: true, result: readPlan(plan) });
-      return;
-    }
-    if (msg.op === "render") {
-      await fontsReady;
-      const region = msg.view;
-      const framed = (msg.frame | 0) > 0;
-      const frame = framed
-        ? noting.renderFrame(msg.frame | 0)
-        : region
-          ? noting.renderPageView(msg.page, msg.pixelHeight, region.x | 0, region.y | 0, region.w | 0, region.h | 0, region.layer | 0)
-          : noting.renderPagePixels(msg.page, msg.pixelHeight);
-      if (viewSurface && (msg.tile | 0) > 0) noting.retainViewTile(msg.tile | 0, msg.page | 0);
-      if (viewSurface) {
-        self.postMessage({
-          id: msg.id,
-          ok: true,
-          result: { width: frame.width, height: frame.height, kept: true },
-        });
-        return;
-      }
-      const view = new Uint8Array(frame.pixels);
-      const pixels = view.slice();
-      self.postMessage(
-        { id: msg.id, ok: true, result: { width: frame.width, height: frame.height, pixels } },
-        [pixels.buffer],
-      );
       return;
     }
     throw new Error(`알 수 없는 코어 요청: ${msg.op}`);

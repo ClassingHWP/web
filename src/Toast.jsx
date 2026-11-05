@@ -118,8 +118,8 @@ export function Toaster() {
       });
       if (!open) arm(item);
     };
-    window.addEventListener("noting-toast", onToast);
-    return () => window.removeEventListener("noting-toast", onToast);
+    window.addEventListener("chwp-toast", onToast);
+    return () => window.removeEventListener("chwp-toast", onToast);
   });
 
   useEffect(() => () => {

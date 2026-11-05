@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-// 블록 마커를 누르면 그 자리 위에 뜨는 메뉴. 고르면 noting-selection-action 으로 셸에 넘긴다.
+// 블록 마커를 누르면 그 자리 위에 뜨는 메뉴. 고르면 chwp-selection-action 으로 셸에 넘긴다.
 // 보기 전용이면 복사만 둔다.
 const editActions = [
   { action: "cut", label: "잘라내기" },
@@ -19,8 +19,8 @@ export function SelectionMenu() {
       const detail = event.detail || {};
       setMenu({ x: Number(detail.x) || 0, y: Number(detail.y) || 0, readOnly: !!detail.readOnly });
     };
-    window.addEventListener("noting-selection-menu", onMenu);
-    return () => window.removeEventListener("noting-selection-menu", onMenu);
+    window.addEventListener("chwp-selection-menu", onMenu);
+    return () => window.removeEventListener("chwp-selection-menu", onMenu);
   }, []);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function SelectionMenu() {
           className={`ui-ghost h-12 min-w-[76px] px-3 text-center active:bg-[#f5f5f5] ${index > 0 ? "border-l border-[#e5e5e5]" : ""} ${item.action === "delete" ? "text-[#c42b1c]" : ""}`}
           // 클립보드 쓰기·읽기는 사용자 탭 안에서만 된다. 그래서 pointerdown 이 아니라 click 에서 넘긴다.
           onClick={() => {
-            window.dispatchEvent(new CustomEvent("noting-selection-action", { detail: { action: item.action } }));
+            window.dispatchEvent(new CustomEvent("chwp-selection-action", { detail: { action: item.action } }));
             setMenu(null);
           }}
         >
