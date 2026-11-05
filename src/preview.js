@@ -1,6 +1,7 @@
 import { createCoreSession } from "./core-session.js";
 import { createScreen2D } from "./screen-2d.js";
 import { startRemoteLog } from "./remote-log.js";
+import { startEmbed } from "./embed.js";
 
 // 보기·편집 전환. 보기 전용이면 코어를 읽기 전용으로 켜고, 글자 입력칸에 초점을 주지 않는다.
 // 라우트(자식)의 effect 가 셸(부모)의 startPreview 보다 먼저 돌므로, 시작 전이면 값만 기억해 둔다.
@@ -39,6 +40,8 @@ export async function startPreview() {
     );
     // ?rlog=1 이면 폰 같은 원격 기기의 로그와 프레임 통계를 개발 서버로 보낸다.
     const remoteLog = startRemoteLog(session);
+    // iframe 으로 넣은 보기면 넣은 페이지와 배율·쪽·쪽 모양을 주고받는다.
+    const embed = startEmbed((event) => sendInput(event));
     const status = document.getElementById("status");
     status.textContent = "코어 준비 중...";
     // 파일은 문서를 여는 동안만 쌓인다. 렌더링과 요소는 쪽마다 따로 둔다.
@@ -274,6 +277,9 @@ export async function startPreview() {
     let lastNotifiedPercent = -1;
     let lastNotifiedFitPage = false;
     let lastNotifiedFitWidth = false;
+    let lastNotifiedGrid = "";
+    // 코어가 정한 쪽 모양(입력 답). GPU 화면이면 lastPaint 가 없어서 따로 둔다.
+    let viewGrid = { mode: "auto", cols: 1, rows: 1, effectiveCols: 1 };
 
     // 화면 가운데 쪽은 코어가 정한다(보기 계획·카메라의 page). 셸은 받은 값을 쓴다.
     function resolveCurrentPageIndex(scrollY = shownScrollY, hintPage = -1) {
@@ -301,14 +307,17 @@ export async function startPreview() {
       }
       const percent = currentZoomPercent();
       const page = activeIndex >= 0 ? activeIndex + 1 : 1;
+      const grid = `${viewGrid.mode}:${viewGrid.cols}x${viewGrid.rows}`;
       if (
         forceNotify ||
         page !== lastNotifiedPage ||
         count !== lastNotifiedPageCount ||
         percent !== lastNotifiedPercent ||
         fitPageMode !== lastNotifiedFitPage ||
-        fitWidthMode !== lastNotifiedFitWidth
+        fitWidthMode !== lastNotifiedFitWidth ||
+        grid !== lastNotifiedGrid
       ) {
+        lastNotifiedGrid = grid;
         lastNotifiedPage = page;
         lastNotifiedPageCount = count;
         lastNotifiedPercent = percent;
@@ -327,10 +336,10 @@ export async function startPreview() {
           zoomLabel: zoomLabelNow,
           scrollX: shownScrollX | 0,
           scrollY: shownScrollY | 0,
-          gridMode: lastPaint?.gridMode || "auto",
-          gridCols: lastPaint?.gridCols || 1,
-          gridRows: lastPaint?.gridRows || 1,
-          effectiveCols: lastPaint?.effectiveCols || 1,
+          gridMode: viewGrid.mode,
+          gridCols: viewGrid.cols,
+          gridRows: viewGrid.rows,
+          effectiveCols: viewGrid.effectiveCols,
           rowStepY: lastPaint?.rowStepY || 0,
           pageStepY: lastPaint?.pageStepY || 0,
         };
@@ -368,10 +377,10 @@ export async function startPreview() {
           page,
           pageIndex,
           pageCount: count,
-          gridMode: lastPaint?.gridMode || "auto",
-          gridCols: lastPaint?.gridCols || 1,
-          gridRows: lastPaint?.gridRows || 1,
-          effectiveCols: lastPaint?.effectiveCols || 1,
+          gridMode: viewGrid.mode,
+          gridCols: viewGrid.cols,
+          gridRows: viewGrid.rows,
+          effectiveCols: viewGrid.effectiveCols,
           rowStepY: lastPaint?.rowStepY || 0,
           pageStepY: lastPaint?.pageStepY || 0,
         },
@@ -1413,6 +1422,7 @@ export async function startPreview() {
       end(error) {
         if (this.done) return;
         this.done = true;
+        if (error) embed.failed(error);
         const head = {
           idx: 0,
           문서: this.name,
@@ -1425,13 +1435,6 @@ export async function startPreview() {
         remoteLog?.note("opening", [head, ...this.steps]);
       },
     };
-
-    function openingPageIndex(count) {
-      const raw = new URLSearchParams(location.search).get("page");
-      const n = Number(raw);
-      if (!Number.isFinite(n) || n < 1 || count <= 0) return 0;
-      return Math.min(count - 1, (n | 0) - 1);
-    }
 
     function foldPageLog(rows) {
       const pages = [];
@@ -1831,6 +1834,15 @@ export async function startPreview() {
         }
         placePdf(lastPaint);
       }
+      // 쪽 모양은 입력 답에만 있다(프레임 알림에는 없다).
+      if (typeof camera.gridMode === "string") {
+        viewGrid = {
+          mode: camera.gridMode,
+          cols: camera.gridCols | 0 || 1,
+          rows: camera.gridRows | 0 || 1,
+          effectiveCols: camera.effectiveCols | 0 || 1,
+        };
+      }
       if (zoomChanged) syncZoomInput(camPage);
       else syncViewportInfo(camPage);
     }
@@ -2120,7 +2132,6 @@ export async function startPreview() {
             opening.mark("쪽 계산", layoutStarted, foldPageLog(planned.detail));
             const laid = Array.isArray(plan.pages) ? plan.pages : [];
             scenePages = laid;
-            const openPage = openingPageIndex(scenePages.length);
             pages = Array.from({ length: scenePages.length }, () => "");
             pageSelect.replaceChildren();
             pages.forEach((_, pageIndex) => {
@@ -2128,14 +2139,16 @@ export async function startPreview() {
               option.textContent = `${pageIndex + 1}쪽`;
               pageSelect.append(option);
             });
-            if (pages.length) pageSelect.selectedIndex = openPage;
             ensureViewport();
             if (screenAttached) await screenAttached;
             await session.beginGrind();
             await sendInput(viewportInput());
-            // 열 쪽으로 가는 자리(눈금자 높이 포함)는 코어가 정한다.
-            if (openPage > 0) await sendInput({ type: "revealPage", page: openPage });
+            // 주소의 쪽 모양·배율·쪽(?view= &zoom= &page=)은 코어가 읽고 그 차례로 맞춘다.
+            const opened = await sendInput({ type: "embedOpen", choice: location.search });
+            const openPage = opened?.page | 0;
+            if (pages.length) pageSelect.selectedIndex = openPage;
             setPages([], openPage, true);
+            embed.opened(opened);
             // 글꼴 고르기 목록에 이 문서 글꼴이 더해진다(막힌 글꼴은 코어가 뺀다).
             void session.pickableFonts().then((list) => {
               window.__chwpFontList = Array.isArray(list) ? list : [];

@@ -30,11 +30,80 @@ https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp
 보기 전용 화면을 `iframe` 으로 넣으면 페이지 안에서 문서를 보여 줄 수 있다.
 
 ```html
-<iframe src="https://ede.kr/hwp/viewer?file=https://example.com/공문.hwpx"
+<iframe src="https://ede.kr/hwp/viewer?file=https://example.com/공문.hwpx&zoom=width"
         width="100%" height="800" style="border: 0"></iframe>
 ```
 
-화면 없이 엔진만 불러 문서를 그리거나 글자를 뽑으려면 [ClassingHWP/core 의 WASM 사용 예제](https://github.com/ClassingHWP/core#wasm-사용-예제) 를 본다.
+#### 처음 보기 정하기
+
+주소에 붙이면 문서를 연 뒤 쪽 모양, 배율, 쪽 차례로 맞춘다. 모르는 값은 건너뛴다.
+
+| 인자 | 값 | 뜻 |
+|---|---|---|
+| `zoom` | `150`, `150%` | 배율(10~800%) |
+| | `page`, `width` | 쪽 맞춤, 폭 맞춤 |
+| `page` | `3`, `first`, `last` | 열 쪽(1부터). 넘치면 끝 쪽 |
+| `view` | `auto`, `single`, `two`, `grid` | 쪽 모양: 자동, 한 쪽, 두 쪽, 여러 쪽 |
+| `cols`, `rows` | `3`, `2` | `view=grid` 의 칸 수(최대 8, 주지 않으면 4×3) |
+
+```
+https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp&view=two&zoom=page&page=5
+```
+
+#### 페이지에서 다루기
+
+열린 뒤에는 `postMessage` 로 명령을 보내고 알림을 받는다. 모든 메시지는 `chwp` 칸에 종류를 적는다.
+
+보내는 명령:
+
+| 메시지 | 하는 일 |
+|---|---|
+| `{ chwp: "zoom", value: 150 }` | 배율. `value` 는 `"150%"`, `"page"`, `"width"`, `"in"`(한 단계 확대), `"out"`(한 단계 축소)도 된다 |
+| `{ chwp: "page", value: 5 }` | 쪽 이동. `"next"`, `"prev"`(한 줄씩), `"first"`, `"last"` 도 된다 |
+| `{ chwp: "view", value: "grid", cols: 3, rows: 2 }` | 쪽 모양. `"auto"`, `"single"`, `"two"`, `"grid"` |
+| `{ chwp: "state" }` | 지금 상태를 `state` 알림으로 받는다 |
+
+받는 알림:
+
+| `chwp` | 언제 |
+|---|---|
+| `ready` | 문서를 다 열었을 때. 이 뒤에 보낸 명령만 듣는다 |
+| `change` | 배율, 쪽, 쪽 모양이 바뀔 때. 사용자가 휠·손가락으로 바꿔도 온다 |
+| `state` | `{ chwp: "state" }` 에 대한 답 |
+| `error` | 문서를 열지 못했을 때. `message` 에 까닭이 있다 |
+
+`ready`·`change`·`state` 에 담기는 값:
+
+| 칸 | 뜻 |
+|---|---|
+| `page`, `pageCount` | 지금 쪽(1부터, 화면 가운데 쪽)과 전체 쪽 수 |
+| `percent` | 지금 배율(%) |
+| `zoomMode` | `percent`, `fitPage`(쪽 맞춤), `fitWidth`(폭 맞춤) |
+| `zoomLabel` | 화면에 보일 배율 글(`150%`, `쪽 맞춤`) |
+| `view`, `cols`, `rows` | 쪽 모양과 칸 수 |
+
+배율이 부드럽게 바뀌는 동안에는 `change` 가 여러 번 온다. 알림에는 문서 내용이 없다.
+
+```html
+<button id="out">−</button> <span id="info"></span> <button id="in">+</button>
+<iframe id="doc" src="https://ede.kr/hwp/viewer?file=https://example.com/공문.hwpx"
+        width="100%" height="800" style="border: 0"></iframe>
+<script>
+  const doc = document.getElementById("doc");
+  const send = (msg) => doc.contentWindow.postMessage(msg, "https://ede.kr");
+  document.getElementById("in").onclick = () => send({ chwp: "zoom", value: "in" });
+  document.getElementById("out").onclick = () => send({ chwp: "zoom", value: "out" });
+  window.addEventListener("message", (event) => {
+    if (event.source !== doc.contentWindow) return;
+    const { chwp, page, pageCount, zoomLabel } = event.data || {};
+    if (chwp === "ready" || chwp === "change") {
+      document.getElementById("info").textContent = `${page} / ${pageCount}쪽 · ${zoomLabel}`;
+    }
+  });
+</script>
+```
+
+화면 없이 엔진만 불러 문서를 그리거나 글자를 뽑으려면 [ClassingHWP/core 릴리스](https://github.com/ClassingHWP/core/releases)의 WASM 파일을 쓴다. 부르는 법은 이 저장소의 `src/core-worker.js` 를 본다.
 
 ## 받기
 
