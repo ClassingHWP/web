@@ -1,12 +1,13 @@
 {
   "name": "classinghwp-web",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --mode lan --port 5175 --strictPort",
     "build": "node patch-embind-eval.mjs && vite build",
+    "build:viewer": "node build-viewer.mjs",
     "preview": "vite preview"
   },
   "keywords": [],
