@@ -1,7 +1,7 @@
 // 웹 코어. UI 스레드와 메시지로만 이야기한다.
 // 앱은 같은 op 를 자기 프로세스 통신으로 코어에 넘기면 된다.
 //
-// boot                 wasm 을 올리고 글꼴 목록 요청을 시작한다
+// boot { fonts }       wasm 을 올리고 글꼴 목록 요청을 시작한다. fonts 는 글꼴 서버와 목록(아래 setFonts)
 // fetchFonts           코어가 고른 글꼴 파일을 받아 코어에 넣는다
 // fontFiles            문서가 요청한 글꼴 받기가 끝났는지 본다. 바이트는 도착하는 대로 이미 코어에 들어간다
 // parse                문서 JSON
@@ -14,13 +14,8 @@
 // surface { canvas | remote }    화면을 붙인다. 그리기는 코어 프레임 루프가 한다
 // input { event }                포인터·휠·키 값을 그대로 넘긴다. 무엇을 할지는 코어가 정한다
 
-import { fontBase } from "./font-base.js";
 import { createScreen2D } from "./screen-2d.js";
-import createChwpModulePthread from "@wasm/chwp.mjs";
-import createChwpModuleSingle from "@wasm/chwp-single.mjs";
-import wasmPthreadUrl from "@wasm/chwp.wasm?url";
-import wasmSingleUrl from "@wasm/chwp-single.wasm?url";
-import dataUrl from "@wasm/chwp.data?url";
+import { engine } from "./engine.js";
 
 let chwp = null;
 let chwpThreaded = false;
@@ -235,13 +230,33 @@ function canUseWasmThreads() {
 function makeLocateFile(targetWasmUrl) {
   return function locateFile(file) {
     if (file.endsWith(".wasm")) return targetWasmUrl;
-    if (file.endsWith(".data")) return dataUrl;
+    if (file.endsWith(".data")) return engine.dataUrl;
     return file;
   };
 }
 
+// 글꼴 서버와 목록. base 아래 <폴더>/<파일> 에서 글꼴을 받는다. 목록 셋(index·licenseSwap·replace)은 주소이거나
+// 이미 읽은 JSON 값이다. 주지 않으면 base 아래 index.json, license-swap.json, replace.json 을 읽는다.
+// 쓰는 쪽이 우리 목록을 받아 고쳐 넘길 수 있게 둔다.
+let fonts = { base: "", index: null, licenseSwap: null, replace: null };
+function setFonts(config) {
+  const given = typeof config === "string" ? { base: config } : (config && typeof config === "object" ? config : {});
+  const base = new URL(String(given.base || "/fonts/"), self.location.href).href.replace(/\/?$/, "/");
+  fonts = { base, index: given.index ?? null, licenseSwap: given.licenseSwap ?? null, replace: given.replace ?? null };
+}
+
+// 목록 하나. 값이면 그대로, 주소면 받아서, 없으면 base 아래 기본 이름으로 받는다.
+async function fontList(source, name) {
+  if (source && typeof source === "object") return source;
+  const url = typeof source === "string" && source ? new URL(source, fonts.base).href : fonts.base + name;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const body = await response.json();
+  return body && typeof body === "object" && !Array.isArray(body) ? body : null;
+}
+
 function fontUrl(folder, name) {
-  return fontBase + folder + "/" + encodeURIComponent(name);
+  return fonts.base + folder + "/" + encodeURIComponent(name);
 }
 
 function startDocumentFonts(faces) {
@@ -288,31 +303,17 @@ function fetchDocumentFonts(faces) {
 async function loadFontCatalog() {
   const started = Date.now();
   let catalog = {};
-  for (const url of [fontBase + "index.json"]) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) continue;
-      const body = await response.json();
-      if (body && typeof body === "object" && !Array.isArray(body) && Object.keys(body).length) {
-        catalog = body;
-        break;
-      }
-    } catch {
-      // 빌드 글꼴 목록이 없으면 빈 목록으로 둔다.
-    }
+  try {
+    catalog = (await fontList(fonts.index, "index.json")) || {};
+  } catch {
+    // 글꼴 목록이 없으면 빈 목록으로 둔다.
   }
   try {
     chwp.setFontCatalog(JSON.stringify(catalog));
-    const swapResponse = await fetch(fontBase + "license-swap.json");
-    if (swapResponse.ok) {
-      const swaps = await swapResponse.json();
-      if (swaps && typeof swaps === "object" && !Array.isArray(swaps)) chwp.setFontLicenseSwaps(JSON.stringify(swaps));
-    }
-    const replaceResponse = await fetch(fontBase + "replace.json");
-    if (replaceResponse.ok) {
-      const listed = await replaceResponse.json();
-      if (listed && typeof listed === "object" && !Array.isArray(listed)) chwp.setFontReplacements(JSON.stringify(listed));
-    }
+    const swaps = await fontList(fonts.licenseSwap, "license-swap.json");
+    if (swaps) chwp.setFontLicenseSwaps(JSON.stringify(swaps));
+    const listed = await fontList(fonts.replace, "replace.json");
+    if (listed) chwp.setFontReplacements(JSON.stringify(listed));
   } catch (error) {
     chwp.setFontCatalog("{}");
     console.warn("font catalog", error);
@@ -320,7 +321,8 @@ async function loadFontCatalog() {
   return Date.now() - started;
 }
 
-async function boot() {
+async function boot(fontConfig) {
+  setFonts(fontConfig);
   const started = Date.now();
   // Skia WebGL 은 이 캔버스의 컨텍스트로 그림을 확대한 뒤 픽셀만 본문에 붙인다.
   const makeModuleOpts = (targetWasmUrl) => ({
@@ -334,16 +336,16 @@ async function boot() {
   });
   if (canUseWasmThreads()) {
     try {
-      chwp = await createChwpModulePthread(makeModuleOpts(wasmPthreadUrl));
+      chwp = await (await engine.pthread())(makeModuleOpts(engine.wasmPthreadUrl));
       chwpThreaded = true;
     } catch (error) {
       onStdout(`[ClassingHWP] 멀티스레드 부팅 실패 → 단일 스레드로 전환 (${formatError(error)})`);
-      chwp = await createChwpModuleSingle(makeModuleOpts(wasmSingleUrl));
+      chwp = await (await engine.single())(makeModuleOpts(engine.wasmSingleUrl));
       chwpThreaded = false;
     }
   } else {
     onStdout("[ClassingHWP] SharedArrayBuffer 미지원 환경 → 단일 스레드 WASM 폴백");
-    chwp = await createChwpModuleSingle(makeModuleOpts(wasmSingleUrl));
+    chwp = await (await engine.single())(makeModuleOpts(engine.wasmSingleUrl));
     chwpThreaded = false;
   }
   chwp.onFontFaces = (faces) => {
@@ -383,7 +385,7 @@ self.onmessage = async (event) => {
   const msg = event.data || {};
   try {
     if (msg.op === "boot") {
-      const result = await boot();
+      const result = await boot(msg.fonts);
       self.postMessage({ id: msg.id, ok: true, result });
       return;
     }
@@ -554,6 +556,7 @@ self.onmessage = async (event) => {
           needsTick: !!camera.needsTick,
           tapSlop: Number(camera.tapSlop) || 0,
           rulersWanted: !!camera.rulersWanted,
+          editButton: !!camera.editButton,
           scrollChanged: !!camera.scrollChanged,
           zoomChanged: !!camera.zoomChanged,
           coasting: !!camera.coasting,

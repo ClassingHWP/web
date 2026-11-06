@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-// 메뉴·리본·상태 줄이 같이 쓰는 명령. 셸 이벤트로 preview.js 에 넘긴다.
+// 메뉴·리본·상태 줄이 같이 쓰는 명령. 창 사건으로 보기(app-viewer.js)에 넘긴다.
 
 export function newDocument() {
   window.dispatchEvent(new Event("chwp-new-document"));

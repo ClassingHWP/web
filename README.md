@@ -13,7 +13,7 @@ A browser-based viewer and editor for Hangul word processor documents (`.hwp`, `
 | 화면 | 주소 | 하는 일 |
 |---|---|---|
 | 편집기 | https://ede.kr/hwp/editor | 문서를 열고 고치고, `.hwp`·`.hwpx` 로 저장한다 |
-| 보기 전용 | [https://ede.kr/hwp/viewer](https://ede.kr/hwp/viewer?file=/hwp/samples/math-curriculum.hwp) | 문서를 읽기만 한다. 고치는 메뉴가 없고, 편집기로 넘어가는 단추가 있다 |
+| 보기 전용 | [https://ede.kr/hwp/viewer](https://ede.kr/hwp/viewer?file=/hwp/samples/math-curriculum.hwp) | 문서를 읽기만 한다. 고치는 메뉴가 없다. 편집기로 넘어가는 단추는 `edit=1` 을 줄 때만 보인다 |
 
 보기 전용 링크는 교육부 고시 「수학과 교육과정」(제2022-33호 [별책 8])을 열어 보여 준다. 직접 빌드해 띄운 앱도 같은 `/editor`, `/viewer` 주소를 쓴다.
 
@@ -45,6 +45,7 @@ https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp
 | `page` | `3`, `first`, `last` | 열 쪽(1부터). 넘치면 끝 쪽 |
 | `view` | `auto`, `single`, `two`, `grid` | 쪽 모양: 자동, 한 쪽, 두 쪽, 여러 쪽 |
 | `cols`, `rows` | `3`, `2` | `view=grid` 의 칸 수(최대 8, 주지 않으면 4×3) |
+| `edit` | `1`, `0` | 편집기로 넘어가는 「편집」 단추를 보인다. 주지 않으면 숨긴다 |
 
 ```
 https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp&view=two&zoom=page&page=5
@@ -61,6 +62,7 @@ https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp&view=two&zoom=page
 | `{ chwp: "zoom", value: 150 }` | 배율. `value` 는 `"150%"`, `"page"`, `"width"`, `"in"`(한 단계 확대), `"out"`(한 단계 축소)도 된다 |
 | `{ chwp: "page", value: 5 }` | 쪽 이동. `"next"`, `"prev"`(한 줄씩), `"first"`, `"last"` 도 된다 |
 | `{ chwp: "view", value: "grid", cols: 3, rows: 2 }` | 쪽 모양. `"auto"`, `"single"`, `"two"`, `"grid"` |
+| `{ chwp: "edit", value: true }` | 「편집」 단추를 보인다. `false` 면 숨긴다 |
 | `{ chwp: "state" }` | 지금 상태를 `state` 알림으로 받는다 |
 
 받는 알림:
@@ -81,6 +83,7 @@ https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp&view=two&zoom=page
 | `zoomMode` | `percent`, `fitPage`(쪽 맞춤), `fitWidth`(폭 맞춤) |
 | `zoomLabel` | 화면에 보일 배율 글(`150%`, `쪽 맞춤`) |
 | `view`, `cols`, `rows` | 쪽 모양과 칸 수 |
+| `edit` | 「편집」 단추가 보이는지 |
 
 배율이 부드럽게 바뀌는 동안에는 `change` 가 여러 번 온다. 알림에는 문서 내용이 없다.
 
@@ -102,6 +105,29 @@ https://ede.kr/hwp/viewer?file=https://example.com/공문.hwp&view=two&zoom=page
   });
 </script>
 ```
+
+### 내 페이지에 직접 넣기 (React·Next.js)
+
+iframe 없이 내 사이트에서 엔진까지 돌리려면 보기 패키지 `@classinghwp/viewer` 를 쓴다. [릴리스](https://github.com/ClassingHWP/web/releases)의 `classinghwp-viewer-<버전>.tgz` 를 바로 설치한다.
+
+```bash
+npm install https://github.com/ClassingHWP/web/releases/download/v0.2.2/classinghwp-viewer-0.2.2.tgz
+cp -r node_modules/@classinghwp/viewer/engine public/chwp
+```
+
+```jsx
+import { HwpViewer } from "@classinghwp/viewer/react";
+import "@classinghwp/viewer/viewer.css";
+
+<HwpViewer file="/docs/공문.hwpx" zoom="width" style={{ height: 700 }} onChange={(s) => console.log(s.page)} />
+```
+
+- `engine/` 폴더는 내 사이트의 `/chwp/` 에 올린다. 엔진의 스레드 워커는 같은 출처에서만 뜬다.
+- 여러 스레드로 돌리려면 페이지가 `Cross-Origin-Opener-Policy: same-origin` 과 `Cross-Origin-Embedder-Policy: require-corp` 를 보낸다. 보내지 않으면 단일 스레드로 떨어진다.
+- 글꼴은 기본으로 ClassingHWP 글꼴 서버에서 받는다. `fonts` 로 다른 서버를 가리키거나 고친 글꼴 목록을 넘길 수 있다.
+- React 없이는 `createViewer(element, options)` 를 쓴다. 속성·메서드·알림은 패키지의 README(`viewer-package.md`)에 있다.
+
+패키지는 `npm run build:viewer` 로 만들고 `build/viewer` 에 생긴다(엔진 WASM 을 먼저 빌드한다).
 
 화면 없이 엔진만 불러 문서를 그리거나 글자를 뽑으려면 [ClassingHWP/core 릴리스](https://github.com/ClassingHWP/core/releases)의 WASM 파일을 쓴다. 부르는 법은 이 저장소의 `src/core-worker.js` 를 본다.
 

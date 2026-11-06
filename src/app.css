@@ -131,71 +131,6 @@
     section { min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
     .toolbar button:disabled,
     .toolbar select:disabled { opacity: 0.45; }
-    .preview-scroll {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      min-width: 0;
-      min-height: 0;
-      overflow: hidden;
-      background: #e4e4e7;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      touch-action: none;
-    }
-    html.zoomed .preview-scroll {
-      overflow: auto;
-      align-items: flex-start;
-      justify-content: flex-start;
-    }
-    html.view-mode .preview-scroll {
-      overflow: hidden;
-      align-items: stretch;
-      justify-content: stretch;
-    }
-    html.view-mode .page-stack {
-      width: 100%;
-      height: 100%;
-      max-width: none;
-      max-height: none;
-    }
-    .view-canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      display: block;
-    }
-    .view-caret {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 1px;
-      z-index: 4;
-      pointer-events: none;
-      animation: view-caret-blink 1.06s step-end infinite;
-    }
-    @keyframes view-caret-blink {
-      50% { opacity: 0; }
-    }
-    .view-scroller {
-      position: absolute;
-      inset: 0;
-      z-index: 5;
-      overflow: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: none;
-      touch-action: none;
-    }
-    .view-scroller::-webkit-scrollbar {
-      display: none;
-    }
-    .view-spacer { pointer-events: none; }
-    html.zoomed .page-stack {
-      max-width: none;
-      max-height: none;
-    }
     .sheet {
       position: relative;
       height: 100%;
@@ -295,18 +230,6 @@
       image-rendering: auto;
     }
     .empty-preview { color: #555; padding: 1rem; line-height: 1.4; }
-    .page-stack {
-      position: relative;
-      flex: 0 0 auto;
-      height: 100%;
-      width: 100%;
-      line-height: 0;
-    }
-    #sheetSlot {
-      position: relative;
-      z-index: 2;
-      height: 100%;
-    }
 
     /* 토스트: 아래에서 0.22초 동안 올라오고, 0.18초 동안 아래로 내려간다. 쌓인 자리는 0.3초 동안 옮긴다. */
     @keyframes toast-in { from { transform: translateY(140%); opacity: 0; } to { transform: none; opacity: 1; } }

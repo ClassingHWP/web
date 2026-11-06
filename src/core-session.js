@@ -1,3 +1,5 @@
+import { createDefaultWorker } from "./default-worker.js";
+
 // UI 가 코어에 시키는 순서.
 // 웹은 이 파일을 통해 워커와 이야기하고, 앱은 같은 호출을 자기 통신으로 바꾸면 된다.
 // 포인터·휠·제스처는 값만 바꿔 input 으로 넘긴다. 무엇을 할지는 코어가 정한다.
@@ -11,14 +13,14 @@
 //    코어가 글꼴 이름을 알리면 셸이 받아 도착하는 대로 넣고, 쪽 계산은 그 받기가 끝난 뒤에 한다
 // 4. surface     화면을 붙인다. 그리기는 코어 프레임 루프가 한다
 
-export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps) {
+// workerUrl 은 코어 워커 시작 파일(core-worker-boot.js) 주소다. 없으면 이 앱 빌드가 묶은 워커를 쓴다.
+export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, workerUrl = null) {
   // ?threads=1 이면 스레드를 쓸 수 있어도 단일 스레드 WASM 으로 띄운다(시험용).
   const single = new URLSearchParams(globalThis.location?.search || "").get("threads") === "1";
   // 작은 시작 파일을 먼저 띄우고 그 안에서 코어 워커를 불러온다(core-worker-boot.js 에 까닭).
-  const worker = new Worker(new URL("./core-worker-boot.js", import.meta.url), {
-    type: "module",
-    name: single ? "single" : "core",
-  });
+  const worker = workerUrl
+    ? new Worker(workerUrl, { type: "module", name: single ? "single" : "core" })
+    : createDefaultWorker(single);
   let seq = 0;
   const pending = new Map();
   worker.onmessage = (event) => {
@@ -59,7 +61,9 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps) {
     pending.clear();
   };
 
+  let closed = false;
   function call(op, payload = {}, transfer) {
+    if (closed) return new Promise(() => {});
     const id = ++seq;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject });
@@ -72,7 +76,14 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps) {
   }
 
   return {
-    boot: () => call("boot"),
+    // 워커를 닫는다. 기다리던 일과 뒤에 부른 일은 끝나지 않고 버려진다(닫은 보기가 오류를 내지 않게).
+    close() {
+      worker.terminate();
+      pending.clear();
+      closed = true;
+    },
+    // fonts 는 글꼴 서버 주소 또는 { base, index, licenseSwap, replace } 다(core-worker.js setFonts).
+    boot: (fonts) => call("boot", { fonts }),
     trimCaches: (level) => call("trimCaches", { level }),
     setCacheBudget: (name, bytes) => call("setCacheBudget", { name, bytes }),
     cacheUsage: () => call("cacheUsage"),

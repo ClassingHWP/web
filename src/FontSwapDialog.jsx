@@ -4,7 +4,7 @@ import { TriangleAlert, X } from "lucide-react";
 import { FontField } from "@/FontField";
 
 // 라이선스로 막힌 글꼴이 있는 문서를 처음 고치려 할 때 뜬다.
-// 코어가 편집을 받지 않고 needsFontSwap 을 돌려주면 preview.js 가 chwp-font-swap-ask 로 바꿀 목록을 보낸다.
+// 코어가 편집을 받지 않고 needsFontSwap 을 돌려주면 보기(viewer.js)가 chwp-font-swap-ask 로 바꿀 목록을 보낸다.
 // 줄마다 바꿀 글꼴을 고를 수 있다. 처음 값(지난번에 고른 글꼴 또는 기본 짝)은 코어가 정한다.
 export function FontSwapDialog() {
   const [swaps, setSwaps] = useState(null);

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Outlet, Route, Routes, useLocation, useNavigate } from "react-router";
 import { PencilLine } from "lucide-react";
@@ -6,7 +6,8 @@ import { AppMenuBar } from "./AppMenuBar.jsx";
 import { FontSwapDialog } from "./FontSwapDialog.jsx";
 import { SelectionMenu } from "./SelectionMenu.jsx";
 import { Button } from "@/components/ui/button";
-import { setReadOnly, startPreview } from "./preview.js";
+import { editButtonShown, setReadOnly, startAppViewer } from "./app-viewer.js";
+import "./viewer.css";
 import "./app.css";
 
 // 빌드는 사이트 루트(/) 기준이고, 배포 때 /hwp/ 같은 접두가 붙는다. 번들 주소에서 접두를 읽는다.
@@ -16,52 +17,42 @@ function routerBase() {
   return match?.[1] || "/";
 }
 
-// 캔버스와 startPreview 는 여기 한 번만 둔다. 화면 캔버스는 워커로 넘긴 뒤 다시 쓸 수 없어서(OffscreenCanvas)
+// 문서 보기(viewer.js)는 여기 한 번만 만든다. 화면 캔버스는 워커로 넘긴 뒤 다시 쓸 수 없어서(OffscreenCanvas)
 // 라우트가 바뀌어도 언마운트되면 안 된다. 보기↔편집은 위쪽 도구줄(Outlet)만 바뀐다.
 function DocumentShell() {
+  const host = useRef(null);
   useEffect(() => {
-    startPreview();
+    startAppViewer(host.current);
   }, []);
 
   return (
     <>
       <Outlet />
       <FontSwapDialog />
-      <div hidden>
-        <input id="file" type="file" accept=".hwp,.hwpx" />
-        <button id="prev" type="button" disabled>
-          이전
-        </button>
-        <select id="page" disabled />
-        <button id="next" type="button" disabled>
-          다음
-        </button>
-        <span id="pageInfo" />
-        <span id="status" />
-      </div>
+      <input id="file" type="file" accept=".hwp,.hwpx" hidden />
       <div className="panes">
-        <section>
-          <div className="preview-scroll" id="preview">
-            <div className="page-stack" id="pageStack">
-              <div id="sheetSlot" />
-            </div>
-          </div>
-        </section>
+        <section ref={host} />
       </div>
       <SelectionMenu />
     </>
   );
 }
 
-// 보기 전용. 메뉴·서식 줄 없이 편집 버튼만 둔다. 스크롤·배율·블록·복사는 그대로다.
+// 보기 전용. 메뉴·서식 줄이 없다. 스크롤·배율·블록·복사는 그대로다.
+// 편집 버튼은 처음엔 숨기고, 넣은 페이지가 임베드 명령(주소 ?edit=1, postMessage edit)으로 켤 때만 보인다.
 function ViewChrome() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [shown, setShown] = useState(editButtonShown);
 
   useEffect(() => {
     setReadOnly(true);
+    const onChange = (event) => setShown(!!event.detail?.shown);
+    window.addEventListener("chwp-edit-button", onChange);
+    return () => window.removeEventListener("chwp-edit-button", onChange);
   }, []);
 
+  if (!shown) return null;
   return (
     <Button
       variant="outline"
