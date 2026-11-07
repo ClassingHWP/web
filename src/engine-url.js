@@ -8,5 +8,4 @@ export const engine = {
   single: () => load("chwp-single.mjs"),
   wasmPthreadUrl: at("chwp.wasm"),
   wasmSingleUrl: at("chwp-single.wasm"),
-  dataUrl: at("chwp.data"),
 };

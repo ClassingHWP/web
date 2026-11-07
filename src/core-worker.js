@@ -230,7 +230,6 @@ function canUseWasmThreads() {
 function makeLocateFile(targetWasmUrl) {
   return function locateFile(file) {
     if (file.endsWith(".wasm")) return targetWasmUrl;
-    if (file.endsWith(".data")) return engine.dataUrl;
     return file;
   };
 }

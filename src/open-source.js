@@ -12,8 +12,6 @@ export const openSourceGroups = [
       { id: "woff2", name: "WOFF2 1.0.2", license: "MIT", notice: "Copyright (c) 2013-2017 by the WOFF2 Authors.", url: "https://github.com/google/woff2" },
       { id: "miniz", name: "miniz 3.0.2", license: "MIT", notice: "Copyright 2013-2014 RAD Game Tools and Valve Software", url: "https://github.com/richgel999/miniz" },
       { id: "pugixml", name: "pugixml 1.14", license: "MIT", notice: "Copyright (c) 2006-2023 Arseny Kapoulkine", url: "https://pugixml.org" },
-      { id: "microtex", name: "MicroTeX", license: "MIT", notice: "Copyright (c) 2020 Nano Michael", url: "https://github.com/NanoMichael/MicroTeX" },
-      { id: "tinyxml2", name: "TinyXML-2 10.0.0", license: "zlib", notice: "Lee Thomason", url: "https://github.com/leethomason/tinyxml2" },
       { id: "lz4", name: "LZ4", license: "BSD-2-Clause", notice: "Copyright (C) 2011-2023, Yann Collet.", url: "https://github.com/lz4/lz4" },
       { id: "stb", name: "stb_image · stb_truetype", license: "MIT 또는 퍼블릭 도메인", notice: "Copyright (c) 2017 Sean Barrett", url: "https://github.com/nothings/stb" },
       { id: "emscripten", name: "Emscripten", license: "MIT", notice: "Copyright (c) 2010-2014 Emscripten authors", url: "https://emscripten.org" },

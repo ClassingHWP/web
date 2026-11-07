@@ -65,7 +65,7 @@ await build({
 });
 
 mkdirSync(engineOut, { recursive: true });
-for (const name of ["chwp.mjs", "chwp.wasm", "chwp-single.mjs", "chwp-single.wasm", "chwp.data"]) {
+for (const name of ["chwp.mjs", "chwp.wasm", "chwp-single.mjs", "chwp-single.wasm"]) {
   const from = path.join(wasmDir, name);
   if (!existsSync(from)) throw new Error(`엔진 파일이 없다: ${from} (WASM 을 먼저 빌드한다)`);
   copyFileSync(from, path.join(engineOut, name));
