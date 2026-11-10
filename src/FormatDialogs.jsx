@@ -15,18 +15,45 @@ import {
 import { ColorField } from "./ColorPicker.jsx";
 import { EmphasisIcon, HatchIcon, LineTypeIcon, LineWidthIcon, OutlineIcon, UnderlinePlaceIcon } from "./ShapeIcons.jsx";
 import { FontField } from "./FontField.jsx";
-import { notReady, useWide } from "./ui-actions.js";
-import { TableDialog } from "./TableDialog.jsx";
+import { notReady, pickPicture, useWide } from "./ui-actions.js";
+import { openTableDialog, TableDialog } from "./TableDialog.jsx";
+import { PageControlDialog } from "./PageDialogs.jsx";
+import { SymbolDialog } from "./SymbolDialog.jsx";
+import { HyperlinkDialog, openHyperlinkDialog } from "./HyperlinkDialog.jsx";
+import { ColumnDialog } from "./ColumnDialog.jsx";
+import { GridDialog, MoveGuideDialog } from "./GuideDialogs.jsx";
+import { SectionDialog, openSectionDialog } from "./SectionDialog.jsx";
+import { TablePropertiesDialog } from "./TablePropertiesDialog.jsx";
+import { BookmarkDialog, GoToDialog, openBookmarkDialog, openGoToDialog } from "./BookmarkDialog.jsx";
+import { ComposeDialog, RubyDialog, openComposeDialog, openRubyDialog } from "./GlyphGroupDialog.jsx";
+import { CaseDialog, WidthDialog } from "./TextConvertDialog.jsx";
+import { HeaderFooterDialog, openHeaderFooterDialog } from "./HeaderFooterDialog.jsx";
+import { CopyShapeDialog, openCopyShapeDialog } from "./CopyShapeDialog.jsx";
+import { TableToTextDialog, TextToTableDialog } from "./TableTextDialog.jsx";
+import { TableFlipDialog } from "./TableFlipDialog.jsx";
+import { TableSortDialog } from "./TableSortDialog.jsx";
+import { TableFormulaDialog } from "./TableFormulaDialog.jsx";
+import { MasterPageDialog } from "./MasterPageDialog.jsx";
+import { LineNumberDialog } from "./LineNumberDialog.jsx";
+import { DeletePageDialog } from "./DeletePageDialog.jsx";
+import { MemoDialog } from "./MemoDialog.jsx";
+import { ProofMarkDialog } from "./ProofMarkDialog.jsx";
+import { BlockCalcDialog } from "./BlockCalcDialog.jsx";
+import { DeleteMarksDialog } from "./DeleteMarksDialog.jsx";
+import { NoteShapeDialog } from "./NoteShapeDialog.jsx";
+import { FindDialog, openFindDialog } from "./FindDialog.jsx";
 
 // 시안(글자 모양·문단 모양·편집 용지 대화 상자). 칸 이름과 칸에 친 값을 그대로 코어에 넘기고,
 // 코어가 준 값과 칸 설명(단위·범위·고를 수 있는 값)을 그대로 보인다. 단위 바꾸기와 함께 바뀌는 값도 코어가 정한다.
 // 설정을 누르면 고친 칸을 고친 차례대로 넘긴다.
 
-export function openFormatDialog(name) {
-  window.dispatchEvent(new CustomEvent("chwp-open-format-dialog", { detail: { name } }));
+// lang 을 주면 글자 모양 대화 상자를 그 언어(한글·영문 등)의 언어별 설정으로 연다.
+export function openFormatDialog(name, lang = "") {
+  window.dispatchEvent(new CustomEvent("chwp-open-format-dialog", { detail: { name, lang } }));
 }
 
-const dialogKinds = { char: 0, para: 1, page: 2 };
+
+const dialogKinds = { char: 0, para: 1, page: 2, pageBorder: 4 };
 
 // 편집 용지 칸을 바로 적용한다(리본의 세로·가로·쪽 여백·글자 방향). whole 이면 모든 구역에 적용한다.
 export function applyPageSetup(patch, whole = false) {
@@ -286,7 +313,7 @@ function Radio({ name, checked, onChange, children, disabled = false }) {
 }
 
 // 선 모양 이름. 고를 수 있는 값은 코어가 준다.
-const lineShapeLabels = {
+export const lineShapeLabels = {
   SOLID: "실선", DASH: "파선", DOT: "점선", DASH_DOT: "일점쇄선", DASH_DOT_DOT: "이점쇄선", LONG_DASH: "긴 파선",
   CIRCLE: "원형 점선", DOUBLE_SLIM: "이중 실선", SLIM_THICK: "얇고 굵은 이중선", THICK_SLIM: "굵고 얇은 이중선",
   SLIM_THICK_SLIM: "얇고 굵고 얇은 삼중선", WAVE: "물결", DOUBLE_WAVE: "이중 물결", NONE: "없음",
@@ -300,7 +327,7 @@ const borderSides = [["Top", "위"], ["Bottom", "아래"], ["Left", "왼쪽"], [
 
 // 테두리/배경. 값은 코어의 "char." · "para." 이름 그대로다. 고른 선(펜)을 변 단추로 붙이고 뗀다.
 // 펜의 처음 모양과 굵기 목록·맞추기는 코어가 준다.
-function BorderFillPanel({ prefix, form, extra }) {
+function BorderFillPanel({ prefix, form, extra, borderOnly = false, fillOnly = false }) {
   const values = form.values;
   const key = (name) => `${prefix}.${name}`;
   const inked = (side) => {
@@ -346,7 +373,7 @@ function BorderFillPanel({ prefix, form, extra }) {
   const hatch = values[key("fillHatchStyle")] || "NONE";
   return (
     <>
-      <Section title="테두리">
+      {fillOnly ? null : <Section title="테두리">
         <div className="flex flex-wrap items-start gap-[1.5em]">
           <div className="flex flex-col gap-[0.55em]">
             <Row label="종류"><Choice label="테두리 종류" value={line.type} options={optionsOf(form, key("penType"), lineShapeLabels)} width="12em" icon={(id) => <LineTypeIcon type={id} />} onChange={(type) => changeLine({ type })} /></Row>
@@ -361,14 +388,14 @@ function BorderFillPanel({ prefix, form, extra }) {
             {edgeButton("없음", borderSides.every(([side]) => !inked(side)), () => borderSides.forEach(([side]) => putSide(side, null)))}
           </div>
         </div>
-      </Section>
-      <Section title="배경">
+      </Section>}
+      {borderOnly ? null : <Section title="배경">
         <div className="flex flex-col gap-[0.55em]">
           <Row label="면 색"><ColorField label="면 색" value={values[key("fillFaceColor")] || ""} allowNone noneLabel="면 색 없음" onChange={(hex) => form.set(key("fillFaceColor"), hex || "")} /></Row>
           <Row label="무늬 모양"><Choice label="무늬 모양" value={hatch} options={optionsOf(form, key("fillHatchStyle"), patternLabels)} icon={(id) => <HatchIcon style={id} />} onChange={(style) => form.set(key("fillHatchStyle"), style)} /></Row>
           <Row label="무늬 색"><ColorField label="무늬 색" value={values[key("fillHatchColor")] || ""} disabled={hatch === "NONE"} onChange={(hex) => form.set(key("fillHatchColor"), hex)} /></Row>
         </div>
-      </Section>
+      </Section>}
     </>
   );
 }
@@ -499,14 +526,22 @@ const outlineLabels = { 0: "없음", 1: "실선", 2: "점선", 3: "굵은 실선
 const emphasisLabels = { 0: "없음", 1: "채운 동그라미", 2: "빈 동그라미", 3: "꺾쇠", 4: "물결", 5: "가운뎃점", 6: "쌍점" };
 const shadowLabels = { 0: "없음", 1: "비연속", 2: "연속" };
 const languages = [["대표", "대표"], ["한글", "한글"], ["영문", "영문"], ["한자", "한자"], ["일어", "일어"], ["외국어", "외국어"], ["기호", "기호"], ["사용자", "사용자"]];
+// 언어별 값 이름에 붙는 코어 언어 이름. 대표는 붙이지 않아 모든 언어에 같은 값이 들어간다.
+const languageKeys = { 한글: "HANGUL", 영문: "LATIN", 한자: "HANJA", 일어: "JAPANESE", 외국어: "OTHER", 기호: "SYMBOL", 사용자: "USER" };
 
-function CharDialog({ open, fonts, onClose }) {
+function CharDialog({ open, fonts, onClose, startLang = "대표" }) {
   const [tab, setTab] = useState("기본");
+  const [lang, setLang] = useState("대표");
   const form = useCoreForm(dialogKinds.char, open);
   const v = form.values;
+  // 고른 언어의 값 이름. 대표면 그대로다.
+  const langKey = (name) => (languageKeys[lang] ? `${name}.${languageKeys[lang]}` : name);
   useEffect(() => {
-    if (open) setTab("기본");
-  }, [open]);
+    if (open) {
+      setTab("기본");
+      setLang(languageKeys[startLang] ? startLang : "대표");
+    }
+  }, [open, startLang]);
 
   function apply() {
     const patch = form.patch();
@@ -524,16 +559,16 @@ function CharDialog({ open, fonts, onClose }) {
           <Section title="언어별 설정">
             <div className="flex flex-col gap-[0.55em]">
               <Row label="언어">
-                <Choice label="언어" value="대표" options={languages} width="8.3em" onChange={(lang) => { if (lang !== "대표") notReady("언어별 글자 모양"); }} />
+                <Choice label="언어" value={lang} options={languages} width="8.3em" onChange={setLang} />
               </Row>
               <Row label="글꼴">
-                <FontField value={v.font || ""} fonts={fonts} className="w-[16.5em]" layer="z-[90]" onPick={(font) => form.set("font", font)} />
+                <FontField value={v[langKey("font")] || ""} fonts={fonts} className="w-[16.5em]" layer="z-[90]" onPick={(font) => form.set(langKey("font"), font)} />
               </Row>
               <div className="grid grid-cols-1 gap-[0.55em] sm:grid-cols-2">
-                <Row label="상대크기"><FieldNumber form={form} name="relSize" label="상대크기" /></Row>
-                <Row label="글자 위치"><FieldNumber form={form} name="charOffset" label="글자 위치" /></Row>
-                <Row label="장평"><FieldNumber form={form} name="ratio" label="장평" /></Row>
-                <Row label="자간"><FieldNumber form={form} name="spacing" label="자간" /></Row>
+                <Row label="상대크기"><FieldNumber form={form} name={langKey("relSize")} label="상대크기" /></Row>
+                <Row label="글자 위치"><FieldNumber form={form} name={langKey("charOffset")} label="글자 위치" /></Row>
+                <Row label="장평"><FieldNumber form={form} name={langKey("ratio")} label="장평" /></Row>
+                <Row label="자간"><FieldNumber form={form} name={langKey("spacing")} label="자간" /></Row>
               </div>
             </div>
           </Section>
@@ -930,6 +965,68 @@ function PagePreview({ v }) {
 const gridLabels = { none: "격자 설정 안 함", line: "줄 격자 설정", both: "줄 격자와 글자 격자 설정" };
 const scopeLabels = { section: "현재 구역", document: "문서 전체" };
 
+// 쪽 테두리/배경(한글 2024 쪽 테두리/배경 대화 상자). 값과 칸 설명, 고른 종류(양쪽·홀수·짝수)의 값은 코어가 준다.
+function PageBorderDialog({ open, onClose }) {
+  const [tab, setTab] = useState("테두리");
+  const form = useCoreForm(dialogKinds.pageBorder, open);
+  const v = form.values;
+  const [whole, setWhole] = useState(null);
+  useEffect(() => {
+    if (!open) return;
+    setTab("테두리");
+    setWhole(null);
+  }, [open]);
+  const wholeNow = whole ?? !(Number(v.sectionCount) > 1);
+  function apply() {
+    const patch = { ...form.patch(), which: v.which || "BOTH" };
+    onClose();
+    if (typeof window.__chwpApplyFormatDialog === "function") void window.__chwpApplyFormatDialog(dialogKinds.pageBorder, patch, wholeNow);
+  }
+  const gap = (key, label) => (
+    <Row label={label}><FieldNumber form={form} name={key} label={`${label} 간격`} width="7em" /></Row>
+  );
+  const which = (
+    <Section title="테두리/배경 종류">
+      <Choice label="테두리/배경 종류" value={v.which || "BOTH"} options={optionsOf(form, "which")} width="10em" onChange={(id) => form.set("which", id)} />
+    </Section>
+  );
+  return (
+    <DialogFrame open={open} title="쪽 테두리/배경" tabs={["테두리", "배경"]} tab={tab} onTab={setTab} onApply={apply} onClose={onClose}>
+      {which}
+      {tab === "테두리" ? (
+        <>
+          <BorderFillPanel prefix="page" form={form} borderOnly />
+          <Section title="위치">
+            <Choice label="위치 기준" value={v.basis || "PAPER"} options={optionsOf(form, "basis")} width="10em" onChange={(id) => form.set("basis", id)} />
+            <div className="flex flex-wrap gap-x-[1.5em] gap-y-[0.45em]">
+              {gap("offsetLeft", "왼쪽")}{gap("offsetTop", "위쪽")}{gap("offsetRight", "오른쪽")}{gap("offsetBottom", "아래쪽")}
+            </div>
+            <div className="flex gap-[1.5em]">
+              <Check checked={!!v.headerInside} onChange={(on) => form.set("headerInside", on)}>머리말 포함</Check>
+              <Check checked={!!v.footerInside} onChange={(on) => form.set("footerInside", on)}>꼬리말 포함</Check>
+            </div>
+          </Section>
+          <Section title="적용 쪽">
+            <Choice label="적용 쪽" value={v.applyPages || "ALL"} options={optionsOf(form, "applyPages")} width="10em" onChange={(id) => form.set("applyPages", id)} />
+          </Section>
+        </>
+      ) : (
+        <>
+          <BorderFillPanel prefix="page" form={form} fillOnly />
+          <Section title="채울 영역">
+            <Choice label="채울 영역" value={v.fillArea || "PAPER"} options={optionsOf(form, "fillArea")} width="10em" onChange={(id) => form.set("fillArea", id)} />
+          </Section>
+        </>
+      )}
+      <div className="border-t border-[#e5e5e5] pt-[0.8em]">
+        <Row label="적용 범위">
+          <Choice label="적용 범위" value={wholeNow ? "document" : "section"} options={optionsOf(form, "scope", scopeLabels)} width="10em" onChange={(id) => setWhole(id === "document")} />
+        </Row>
+      </div>
+    </DialogFrame>
+  );
+}
+
 function PageDialog({ open, onClose }) {
   const [tab, setTab] = useState("기본");
   const form = useCoreForm(dialogKinds.page, open);
@@ -1031,6 +1128,7 @@ function PageDialog({ open, onClose }) {
 
 export function FormatDialogs() {
   const [open, setOpen] = useState("");
+  const [charLang, setCharLang] = useState("대표");
   const [fonts, setFonts] = useState(() => (Array.isArray(window.__chwpFontList) ? window.__chwpFontList : []));
 
   useEffect(() => {
@@ -1052,7 +1150,23 @@ export function FormatDialogs() {
     };
     const onOpen = (event) => {
       const name = event.detail?.name;
-      if (name === "char" || name === "para" || name === "page") show(name);
+      if (name === "char") setCharLang(event.detail?.lang || "대표");
+      if (name === "char" || name === "para" || name === "page" || name === "pageBorder") show(name);
+      // 단축키가 여는 다른 대화 상자(Ctrl+F·Ctrl+H 찾기, 칸 블록 S 셀 나누기).
+      if (name === "find" || name === "replace") openFindDialog();
+      if (name === "splitCell") openTableDialog("split");
+      if (name === "goTo") openGoToDialog();
+      if (name === "bookmark") openBookmarkDialog();
+      if (name === "ruby") openRubyDialog();
+      if (name === "compose") openComposeDialog();
+      if (name === "hyperlink") openHyperlinkDialog();
+      if (name === "table") openTableDialog();
+      if (name === "picture") pickPicture();
+      if (name === "section") openSectionDialog();
+      if (name === "headerFooter") openHeaderFooterDialog();
+      if (name === "copyShape") openCopyShapeDialog();
+      if (name === "rubyEdit") openRubyDialog(true);
+      if (name === "composeEdit") openComposeDialog(true);
     };
     window.addEventListener("chwp-open-format-dialog", onOpen);
     return () => {
@@ -1068,10 +1182,41 @@ export function FormatDialogs() {
 
   return (
     <>
-      <CharDialog open={open === "char"} fonts={fonts} onClose={close} />
+      <CharDialog open={open === "char"} fonts={fonts} onClose={close} startLang={charLang} />
       <ParaDialog open={open === "para"} onClose={close} />
       <PageDialog open={open === "page"} onClose={close} />
+      <PageBorderDialog open={open === "pageBorder"} onClose={close} />
       <TableDialog />
+      <PageControlDialog />
+      <SymbolDialog />
+      <HyperlinkDialog />
+      <ColumnDialog />
+      <GridDialog />
+      <MoveGuideDialog />
+      <SectionDialog />
+      <TablePropertiesDialog />
+      <BookmarkDialog />
+      <GoToDialog />
+      <RubyDialog />
+      <ComposeDialog />
+      <CaseDialog />
+      <WidthDialog />
+      <HeaderFooterDialog />
+      <CopyShapeDialog />
+      <TableToTextDialog />
+      <TextToTableDialog />
+      <TableFlipDialog />
+      <TableSortDialog />
+      <TableFormulaDialog />
+      <MasterPageDialog />
+      <LineNumberDialog />
+      <DeletePageDialog />
+      <MemoDialog />
+      <ProofMarkDialog />
+      <BlockCalcDialog />
+      <DeleteMarksDialog />
+      <NoteShapeDialog />
+      <FindDialog />
     </>
   );
 }

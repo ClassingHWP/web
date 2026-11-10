@@ -146,6 +146,59 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editRedo: () => call("editRedo"),
     // 표 넣기. 표 모양은 코어가 정한다.
     editInsertTable: (rows, cols) => call("editInsertTable", { rows: rows | 0, cols: cols | 0 }),
+    // 나누기(page, column, columnDef, section). 자리와 규칙은 코어가 정한다.
+    editInsertBreak: (kind) => call("editInsertBreak", { kind: String(kind) }),
+    // 쪽 탭 컨트롤(header, footer, deleteBand, pageNumber, newNumber, pageHiding). 자리와 규칙은 코어가 정한다.
+    // 각주(endnote 면 미주) 넣기. 자리와 모양은 코어가 정한다.
+    editInsertNote: (endnote) => call("editInsertNote", { endnote: !!endnote }),
+    // 단 설정. 값 이름과 계산은 코어(columnView·editColumns)가 정한다.
+    editColumns: (fields) => call("editColumns", { fields: fields || {} }),
+    // 구역 설정. 값 이름과 규칙은 코어(sectionSettingsView·editSectionSettings)가 정한다.
+    editSectionSettings: (fields) => call("editSectionSettings", { fields: fields || {} }),
+    sectionSettingsView: () => call("sectionSettingsView", {}),
+    // 캡션(고른 개체, 아니면 캐럿 표). 규칙은 코어(editCaption)가 정한다.
+    editCaption: (caption) => call("editCaption", { caption: String(caption) }),
+    // 책갈피·찾아가기. 규칙은 코어(editBookmark·editGoToPage)가 정한다.
+    editBookmark: (action, name, newName) => call("editBookmark", { action: String(action), name: String(name ?? ""), newName: String(newName ?? "") }),
+    editGoToPage: (page) => call("editGoToPage", { page: Number(page) | 0 }),
+    editGoToSection: (section) => call("editGoToSection", { section: Number(section) | 0 }),
+    editGoTo: (fields) => call("editGoTo", { fields: fields || {} }),
+    goToView: () => call("goToView", {}),
+    editExchangeNotes: (mode) => call("editExchangeNotes", { mode: Number(mode) | 0 }),
+    editTableText: (fields) => call("editTableText", { fields: fields || {} }),
+    editDeleteMarks: (fields) => call("editDeleteMarks", { fields: fields || {} }),
+    editCopyShape: (action, type) => call("editCopyShape", { action: String(action), type: Number(type) | 0 }),
+    bookmarkView: () => call("bookmarkView", {}),
+    // 표/셀 속성. 값 이름과 규칙은 코어(tablePropertiesView·editTableProperties)가 정한다.
+    editTableProperties: (fields) => call("editTableProperties", { fields: fields || {} }),
+    tablePropertiesView: () => call("tablePropertiesView", {}),
+    // 덧말 넣기·글자 겹치기. 값 이름과 규칙은 코어(glyphGroupView·editGlyphGroup)가 정한다.
+    editGlyphGroup: (fields) => call("editGlyphGroup", { fields: fields || {} }),
+    glyphGroupView: () => call("glyphGroupView", {}),
+    // 글자 바꾸기(대문자/소문자·전각/반각). 바꾸는 규칙은 코어(editConvertText)가 정한다.
+    editConvertText: (fields) => call("editConvertText", { fields: fields || {} }),
+    // 정렬(글 블록은 본문 정렬, 칸 블록은 표 정렬). 무엇을 어떤 차례로 할지는 코어(editSortParagraphs·sortView)가 정한다.
+    editSortParagraphs: (fields) => call("editSortParagraphs", { fields: fields || {} }),
+    sortView: (fields) => call("sortView", { fields: fields || {} }),
+    // 계산식 대화 상자 값(캐럿 칸 이름, 캐럿이 계산식 결과 안이면 그 식과 형식).
+    tableFormulaView: () => call("tableFormulaView", {}),
+    // 주석 모양. 값 이름과 규칙은 코어(noteShapeView·editNoteShape)가 정한다.
+    editNoteShape: (fields, endnote, whole) => call("editNoteShape", { fields: fields || {}, endnote: !!endnote, whole: !!whole }),
+    noteShapeView: (endnote) => call("noteShapeView", { endnote: !!endnote }),
+    columnView: (fields) => call("columnView", { fields: fields || {} }),
+    // 보기 격자·안내선. 값 이름과 계산은 코어(viewGuides·applyViewGuides)가 정한다.
+    viewGuides: (fields) => call("viewGuides", { fields: fields || {} }),
+    applyViewGuides: (fields) => call("applyViewGuides", { fields: fields || {} }),
+    // 하이퍼링크 넣기. 필드와 글자 모양은 코어가 정한다.
+    editInsertHyperlink: (text, url) => call("editInsertHyperlink", { text: String(text ?? ""), url: String(url ?? "") }),
+    editPageControl: (kind, fields) => call("editPageControl", { kind: String(kind), fields: fields || {} }),
+    pageControlFields: (kind) => call("pageControlFields", { kind: String(kind) }),
+    editShortcut: (command) => call("editShortcut", { command: String(command) }),
+    editFindReplace: (mode, text, replacement, matchCase) =>
+      call("editFindReplace", { mode: String(mode), text: String(text ?? ""), replacement: String(replacement ?? ""), matchCase: !!matchCase }),
+    // 표 구조 편집. 칸(캐럿·칸 블록)과 규칙은 코어가 정한다.
+    // 이름-값은 코어 TableEditCommand 의 필드 이름이다.
+    editTable: (kind, fields = {}) => call("editTableFields", { kind: String(kind), fields: { after: true, count: 1, rows: 1, cols: 1, ...fields } }),
     // 도형 그리기 도구. 1 직사각형, 2 타원, 3 직선, 4 글상자, 5 세로 글상자, 0 끔. 끌기는 포인터 입력으로 간다.
     setDrawTool: (tool) => call("setDrawTool", { tool: tool | 0 }),
     // 그림 넣기. 파일 바이트만 넘긴다.

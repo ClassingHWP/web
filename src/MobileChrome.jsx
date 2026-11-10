@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FilePlus, FolderOpen, Info, Menu, Save, SaveAll, X } from "lucide-react";
 import { openAbout } from "./AboutDialog.jsx";
 import { FormatBar } from "./FormatBar.jsx";
-import { bandTab, MobileRibbon, ribbonTabs } from "./Ribbon.jsx";
+import { bandTab, masterTab, MobileRibbon, noteTab, ribbonTabs, tableTabs } from "./Ribbon.jsx";
 import { newDocument, notReady, openFile, saveAs, toggleRulers, useRulersShown } from "./ui-actions.js";
 
 // 시안(MobileEdit·MobileMenu·MobileFormat)의 휴대폰 화면.
@@ -56,17 +56,18 @@ function useKeyboard() {
 }
 
 // 위 막대. 메뉴 단추와 탭 칩이 한 줄이다(문서 이름은 나중에 노치 쪽에 둔다).
-// 머리말·꼬리말을 고치는 동안은 맨 앞에 그 칩이 생긴다.
-export function MobileHeader({ tab, band = 0, onTab, onMenu }) {
-  const tabs = band > 0 ? [bandTab, ...ribbonTabs] : ribbonTabs;
+// 머리말·꼬리말·각주·미주를 고치는 동안은 맨 앞에 그 칩이 생긴다.
+export function MobileHeader({ tab, band = 0, note = 0, master = false, table = false, onTab, onMenu }) {
+  const tabs = [...(master ? [masterTab] : []), ...(band > 0 ? [bandTab] : []), ...(note > 0 ? [noteTab] : []), ...(table ? tableTabs : []), ...ribbonTabs];
   return (
     <div className="flex h-[60px] items-center gap-[2px] border-b border-[#e5e5e5] pr-[6px] pl-1">
       <button type="button" className="ui-ghost flex size-12 flex-none items-center justify-center rounded-[10px]" aria-label="메뉴" onClick={onMenu}>
         <Menu className="size-6" />
       </button>
-      <div role="tablist" aria-label="메뉴 탭" className="flex min-w-0 flex-1 gap-[2px]">
+      {/* 표·머리말 탭이 붙어 넘치면 가로로 민다. 탭은 줄지 않는다 */}
+      <div role="tablist" aria-label="메뉴 탭" className="flex min-w-0 flex-1 gap-[2px] overflow-x-auto [scrollbar-width:none]">
         {tabs.map((name) => {
-          const isBand = name === bandTab;
+          const isBand = name === masterTab || name === bandTab || name === noteTab || tableTabs.includes(name);
           const picked = name === tab;
           const look = picked
             ? isBand ? "bg-[#1d4ed8] font-medium text-white" : "bg-[#171717] font-medium text-white"
@@ -77,11 +78,12 @@ export function MobileHeader({ tab, band = 0, onTab, onMenu }) {
               type="button"
               role="tab"
               aria-selected={picked}
-              aria-label={isBand ? `${band === 1 ? "머리말" : "꼬리말"} 편집` : undefined}
-              className={`h-11 rounded-[22px] p-0 whitespace-nowrap ${isBand ? "flex-none px-[10px]" : "min-w-0 flex-1"} ${look}`}
+              aria-label={name === bandTab ? `${band === 1 ? "머리말" : "꼬리말"} 편집` : tableTabs.includes(name) ? name : undefined}
+              className={`h-11 rounded-[22px] p-0 whitespace-nowrap ${isBand ? "flex-none px-[10px]" : "min-w-[2.6em] flex-1 shrink-0"} ${look}`}
               onClick={() => onTab(name)}
             >
-              {isBand ? (band === 1 ? "머리말" : "꼬리말") : name}
+              {/* 좁은 화면이라 표 탭은 "표" 를 뗀다 */}
+              {name === bandTab ? (band === 1 ? "머리말" : "꼬리말") : tableTabs.includes(name) ? name.replace("표 ", "") : name}
             </button>
           );
         })}

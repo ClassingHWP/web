@@ -350,6 +350,11 @@ export function attachEditor(ctx) {
       return editKeyNamed("Insert");
     },
     // 리본의 머리말·꼬리말 닫기. 입력칸의 Shift+Esc 와 같은 길이다.
+    // 각주·미주에서 나가기(주석 탭 닫기). 무엇을 할지는 코어 단축키 명령 leaveNote 가 정한다.
+    leaveNote() {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editShortcut("leaveNote"));
+    },
     leaveBand() {
       focusInput();
       return editKeyNamed("Escape", true);
@@ -398,6 +403,155 @@ export function attachEditor(ctx) {
     insertTable(rows, cols) {
       if (blocked()) return Promise.resolve(null);
       return queueEdit(() => session.editInsertTable(rows, cols));
+    },
+    // 단축키 편집 명령(코어 keyBindings 의 command). 무엇을 할지는 코어가 캐럿 상태를 보고 정한다.
+    shortcut(command) {
+      if (command !== "repeatFind" && blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editShortcut(command));
+    },
+    // 나누기: page, column, columnDef, section.
+    insertBreak(kind) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editInsertBreak(kind));
+    },
+    // 문자표에서 고른 글자. 붙여 넣기와 같은 입력칸 사건이다.
+    insertSymbol(text) {
+      if (blocked() || !text) return;
+      ensureInput();
+      fieldEvent({ kind: "paste", data: String(text) });
+    },
+    // 하이퍼링크 넣기.
+    insertHyperlink(text, url) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editInsertHyperlink(text, url));
+    },
+    // 주석 모양.
+    noteShape(fields, endnote, whole) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editNoteShape(fields, endnote, whole));
+    },
+    async noteShapeView(endnote) {
+      await coreReady;
+      return session.noteShapeView(endnote);
+    },
+    // 캡션.
+    caption(caption) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editCaption(caption));
+    },
+    // 책갈피·찾아가기. 이동(goto·쪽)은 읽기 전용에서도 한다.
+    bookmark(action, name, newName) {
+      if (action !== "goto" && blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editBookmark(action, name, newName));
+    },
+    goTo(fields) {
+      return queueEdit(() => session.editGoTo(fields));
+    },
+    deleteMarks(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editDeleteMarks(fields));
+    },
+    tableText(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editTableText(fields));
+    },
+    copyShape(action, type) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editCopyShape(action, type));
+    },
+    exchangeNotes(mode) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editExchangeNotes(mode));
+    },
+    async goToView() {
+      return session.goToView();
+    },
+    goToSection(section) {
+      return queueEdit(() => session.editGoToSection(section));
+    },
+    goToPage(page) {
+      return queueEdit(() => session.editGoToPage(page));
+    },
+    async bookmarkView() {
+      await coreReady;
+      return session.bookmarkView();
+    },
+    // 표/셀 속성.
+    tableProperties(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editTableProperties(fields));
+    },
+    async tablePropertiesView() {
+      await coreReady;
+      return session.tablePropertiesView();
+    },
+    // 덧말 넣기·글자 겹치기.
+    glyphGroup(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editGlyphGroup(fields));
+    },
+    // 글자 바꾸기.
+    convertText(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editConvertText(fields));
+    },
+    sortParagraphs(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editSortParagraphs(fields));
+    },
+    async tableFormulaView() {
+      await coreReady;
+      return session.tableFormulaView();
+    },
+    async sortView(fields) {
+      await coreReady;
+      return session.sortView(fields);
+    },
+    async glyphGroupView() {
+      await coreReady;
+      return session.glyphGroupView();
+    },
+    // 구역 설정.
+    sectionSettings(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editSectionSettings(fields));
+    },
+    async sectionSettingsView() {
+      await coreReady;
+      return session.sectionSettingsView();
+    },
+    // 단 설정.
+    columns(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editColumns(fields));
+    },
+    async columnView(fields) {
+      await coreReady;
+      return session.columnView(fields);
+    },
+    // 각주·미주 넣기.
+    insertNote(endnote) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editInsertNote(endnote));
+    },
+    // 쪽 탭 컨트롤: header, footer, deleteBand, pageNumber, newNumber, pageHiding.
+    pageControl(kind, fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editPageControl(kind, fields));
+    },
+    async pageControlFields(kind) {
+      await coreReady;
+      return session.pageControlFields(kind);
+    },
+    // 찾기·바꾸기: find, findBack, replace, replaceAll. 찾기는 읽기 전용 문서에서도 한다.
+    findReplace(mode, text, replacement, matchCase) {
+      if (mode !== "find" && mode !== "findBack" && blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editFindReplace(mode, text, replacement, matchCase));
+    },
+    // 표 구조 편집: insertRows, insertColumns, deleteRows, deleteColumns, mergeCells, splitCell.
+    tableEdit(kind, options) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editTable(kind, options));
     },
     destroy() {
       for (const timer of fieldTimers.values()) clearTimeout(timer);

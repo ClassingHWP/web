@@ -13,10 +13,10 @@ import {
   TextAlignStart,
 } from "lucide-react";
 import { FontField } from "@/FontField";
-import { notReady, useColorMemory } from "@/ui-actions";
+import { fontLanguages, fontOfLanguage, fontPatchOf, setFontLanguage, useColorMemory, useFontLanguage } from "@/ui-actions";
 import { ColorPopover } from "@/ColorPicker";
 
-const aligns = [
+export const aligns = [
   { id: "JUSTIFY", label: "양쪽 정렬", Icon: TextAlignJustify },
   { id: "LEFT", label: "왼쪽 정렬", Icon: TextAlignStart },
   { id: "CENTER", label: "가운데 정렬", Icon: TextAlignCenter },
@@ -255,6 +255,9 @@ function readCursorStyle(cursor) {
   return {
     font: mixed.font ? "" : typeof cursor.font === "string" ? cursor.font : "",
     fontSwapTo: !mixed.font && typeof cursor.fontSwapTo === "string" ? cursor.fontSwapTo : "",
+    langFonts: Array.isArray(cursor.langFonts)
+      ? cursor.langFonts.map((face, i) => (Array.isArray(mixed.langFonts) && mixed.langFonts[i] ? "" : String(face || "")))
+      : [],
     fontSize: cursor.fontSize | 0,
     fontSizePt: Number(cursor.fontSizePt) || 0,
     fontSizeIn: cursor.fontSizeIn && typeof cursor.fontSizeIn === "object" ? cursor.fontSizeIn : {},
@@ -268,6 +271,7 @@ function readCursorStyle(cursor) {
     strikeout: !mixed.strikeout && !!cursor.strikeout,
     color: hexColor(cursor.color),
     align: mixed.align ? "" : cursor.align,
+    headingType: typeof cursor.headingType === "string" ? cursor.headingType : "NONE",
     lineSpacing: Number(cursor.lineSpacing) || 0,
     lineSpacingValue: Number(cursor.lineSpacingValue) || 0,
     lineSpacingUnit: typeof cursor.lineSpacingUnit === "string" ? cursor.lineSpacingUnit : "",
@@ -290,6 +294,17 @@ export function useCursorStyle() {
     return () => window.removeEventListener("chwp-cursor-style-changed", onStyle);
   }, []);
   return style;
+}
+
+// 문서 스타일 이름(코어 styleNames). 문서를 열 때 chwp-style-list 로 온다.
+export function useStyleNames() {
+  const [names, setNames] = useState(() => (Array.isArray(window.__chwpStyleList) ? window.__chwpStyleList : []));
+  useEffect(() => {
+    const onList = (event) => setNames(Array.isArray(event.detail) ? event.detail : []);
+    window.addEventListener("chwp-style-list", onList);
+    return () => window.removeEventListener("chwp-style-list", onList);
+  }, []);
+  return names;
 }
 
 export function applyStyle(next) {
@@ -360,6 +375,8 @@ function FontSwapNotice({ face, swapTo }) {
 export function FormatBar({ layout = "bar" }) {
   const mobile = layout === "mobile";
   const [style, setStyle] = useState(emptyCursorStyle);
+  const styleNames = useStyleNames();
+  const fontLang = useFontLanguage();
   const [catalog, setCatalog] = useState([]);
   const [unit, setUnit] = useState("pt");
   const [sizeText, setSizeText] = useState("");
@@ -423,24 +440,39 @@ export function FormatBar({ layout = "bar" }) {
   const caretPart = "ui-part flex h-full w-[1.1em] items-center justify-center pr-[0.15em] outline-none";
   return (
     <div className={mobile ? "ui-chrome flex flex-wrap items-center gap-[6px] [--ui-h:48px]" : "ui-chrome flex flex-wrap items-center gap-[0.25em]"}>
-      {/* 스타일: 한글처럼 글꼴 왼쪽. 문단 스타일 바꾸기는 아직 없어서 이름만 보인다 */}
-      <button
-        type="button"
-        className={`ui-outline flex h-[var(--ui-h)] items-center justify-between gap-[0.3em] rounded-[0.5em] pr-[0.4em] pl-[0.6em] ${mobile ? "w-[96px] flex-none" : "w-[7em]"}`}
-        aria-label="스타일"
-        onClick={() => notReady("스타일")}
+      {/* 스타일: 한글처럼 글꼴 왼쪽. 고르면 코어가 그 이름의 스타일을 입힌다 */}
+      <PickList
+        value={style.mixedStyle ? "" : style.styleName}
+        onValueChange={(name) => patch({ styleName: name })}
+        items={styleNames.map((name) => ({ id: name, label: name }))}
+        label="스타일"
+        width={220}
+        triggerClass={`ui-outline flex h-[var(--ui-h)] items-center justify-between gap-[0.3em] rounded-[0.5em] pr-[0.4em] pl-[0.6em] outline-none ${mobile ? "w-[96px] flex-none" : "w-[7em]"}`}
       >
         <span className="flex min-w-0 items-center gap-[0.35em]">
           <TextAlignJustify className="size-[0.9em] text-[#737373]" />
           <span className="truncate">{style.mixedStyle ? "" : style.styleName}</span>
         </span>
         <ChevronDown className="size-[0.8em] text-[#737373]" />
-      </button>
+      </PickList>
+      {mobile ? null : (
+        <PickList
+          value={fontLang}
+          onValueChange={setFontLanguage}
+          items={fontLanguages.map(([name]) => ({ id: name, label: name }))}
+          label="언어"
+          width={140}
+          triggerClass="ui-outline flex h-[var(--ui-h)] w-[4.6em] items-center justify-between gap-[0.2em] rounded-[0.5em] pr-[0.4em] pl-[0.6em] outline-none"
+        >
+          <span className="truncate">{fontLang}</span>
+          <ChevronDown className="size-[0.8em] text-[#737373]" />
+        </PickList>
+      )}
       <FontField
-        value={style.font}
-        lead={style.fontSwapTo ? <FontSwapNotice face={style.font} swapTo={style.fontSwapTo} /> : null}
+        value={mobile ? style.font : fontOfLanguage(style, fontLang)}
+        lead={style.fontSwapTo && (mobile || fontLang === "대표") ? <FontSwapNotice face={style.font} swapTo={style.fontSwapTo} /> : null}
         fonts={catalog}
-        onPick={(font) => patch({ font })}
+        onPick={(font) => patch(mobile ? { font } : fontPatchOf(fontLang, font))}
         onCommit={() => window.dispatchEvent(new Event("chwp-focus-editor"))}
         className={mobile ? "min-w-0 flex-1" : undefined}
       />
@@ -467,17 +499,17 @@ export function FormatBar({ layout = "bar" }) {
         <Stepper labelUp="글꼴 크기 크게" labelDown="글꼴 크기 작게" onUp={() => stepSize(1)} onDown={() => stepSize(-1)} />
       </div>
       {mobile ? <span aria-hidden="true" className="h-0 basis-full" /> : null}
-      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] font-bold shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="두껍게" aria-pressed={style.bold} onClick={() => patch({ toggle: "bold" })}>
+      <button type="button" className="ui-tg inline-flex h-[var(--ui-h)] min-w-[var(--ui-h)] items-center justify-center rounded-[0.5em] px-[0.3em] leading-none font-bold shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="두껍게" aria-pressed={style.bold} onClick={() => patch({ toggle: "bold" })}>
         가
       </button>
-      <button type="button" className="ui-tg h-[var(--ui-h)] min-w-[var(--ui-h)] rounded-[0.5em] px-[0.3em] italic shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="이탤릭" aria-pressed={style.italic} onClick={() => patch({ toggle: "italic" })}>
+      <button type="button" className="ui-tg inline-flex h-[var(--ui-h)] min-w-[var(--ui-h)] items-center justify-center rounded-[0.5em] px-[0.3em] leading-none italic shadow-[inset_0_0_0_1px_#d4d4d4]" aria-label="이탤릭" aria-pressed={style.italic} onClick={() => patch({ toggle: "italic" })}>
         가
       </button>
       {/* 밑줄: 가 = 켜고 끄기, ▾ = 종류 고르기. 한 상자 안에서 누르는 곳만 나뉜다 */}
       <div className={splitClass}>
         <button
           type="button"
-          className="ui-part h-full pr-[0.15em] pl-[0.4em]"
+          className="ui-part flex h-full items-center pr-[0.15em] pl-[0.4em] leading-none"
           aria-label="밑줄"
           aria-pressed={style.underline}
           onClick={() => patch({ toggle: "underline" })}
@@ -496,7 +528,7 @@ export function FormatBar({ layout = "bar" }) {
         </PickList>
       </div>
       <div className={splitClass}>
-        <button type="button" className="ui-part h-full pr-[0.15em] pl-[0.4em]" aria-label="취소줄" aria-pressed={style.strikeout} onClick={() => patch({ toggle: "strikeout" })}>
+        <button type="button" className="ui-part flex h-full items-center pr-[0.15em] pl-[0.4em] leading-none" aria-label="취소줄" aria-pressed={style.strikeout} onClick={() => patch({ toggle: "strikeout" })}>
           <span className="line-through">가</span>
         </button>
         <PickList

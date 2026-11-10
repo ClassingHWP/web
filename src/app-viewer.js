@@ -114,9 +114,17 @@ export function startAppViewer(host) {
   relay("fontswapask", "chwp-font-swap-ask");
   relay("selectionmenu", "chwp-selection-menu");
   relay("formatdialog", "chwp-open-format-dialog");
+  // 코어가 준 알림 글(단축키 편집의 못 찾음·고치지 못한 까닭)은 토스트로 보인다.
+  viewer.addEventListener("notice", (event) => {
+    if (event.detail?.text) notify(event.detail.text);
+  });
   viewer.addEventListener("rulers", (event) => {
     window.__chwpRulersWanted = event.detail.on;
     windowEvent("chwp-rulers-changed", event.detail);
+  });
+  viewer.addEventListener("guides", (event) => {
+    window.__chwpViewGuides = event.detail;
+    windowEvent("chwp-guides-changed", event.detail);
   });
   // 보기를 만들 때 이미 낸 알림(처음 배율·쪽)을 다시 알린다.
   if (viewer.info.zoom) windowEvent("chwp-zoom-changed", viewer.info.zoom);
@@ -138,6 +146,43 @@ export function startAppViewer(host) {
   window.__chwpDrawShape = viewer.drawShape;
   window.__chwpInsertPicture = viewer.insertPicture;
   window.__chwpInsertTable = viewer.insertTable;
+  window.__chwpTableEdit = viewer.tableEdit;
+  window.__chwpInsertBreak = viewer.insertBreak;
+  window.__chwpPageControl = viewer.pageControl;
+  window.__chwpInsertNote = viewer.insertNote;
+  window.__chwpColumns = viewer.columns;
+  window.__chwpSectionSettings = viewer.sectionSettings;
+  window.__chwpTableProperties = viewer.tableProperties;
+  window.__chwpBookmark = viewer.bookmark;
+  window.__chwpCaption = viewer.caption;
+  window.__chwpGoToPage = viewer.goToPage;
+  window.__chwpGoToSection = viewer.goToSection;
+  window.__chwpGoTo = viewer.goTo;
+  window.__chwpGoToView = viewer.goToView;
+  window.__chwpExchangeNotes = viewer.exchangeNotes;
+  window.__chwpCopyShape = viewer.copyShape;
+  window.__chwpTableText = viewer.tableText;
+  window.__chwpDeleteMarks = viewer.deleteMarks;
+  window.__chwpShortcut = viewer.shortcut;
+  window.__chwpBookmarkView = viewer.bookmarkView;
+  window.__chwpTablePropertiesView = viewer.tablePropertiesView;
+  window.__chwpGlyphGroup = viewer.glyphGroup;
+  window.__chwpGlyphGroupView = viewer.glyphGroupView;
+  window.__chwpConvertText = viewer.convertText;
+  window.__chwpSortParagraphs = viewer.sortParagraphs;
+  window.__chwpSortView = viewer.sortView;
+  window.__chwpTableFormulaView = viewer.tableFormulaView;
+  window.__chwpNoteShape = viewer.noteShape;
+  window.__chwpNoteShapeView = viewer.noteShapeView;
+  window.__chwpSectionSettingsView = viewer.sectionSettingsView;
+  window.__chwpColumnView = viewer.columnView;
+  window.__chwpViewGuidesView = viewer.viewGuides;
+  window.__chwpApplyViewGuides = viewer.applyViewGuides;
+  window.__chwpInsertHyperlink = viewer.insertHyperlink;
+  window.__chwpInsertSymbol = viewer.insertSymbol;
+  window.__chwpPageControlFields = viewer.pageControlFields;
+  window.__chwpFindReplace = viewer.findReplace;
+  window.__chwpSelectedText = viewer.selectedText;
   for (const name of ["chwp-format", "chwp-style", "chwp-cursor-style", "chwp-para-shape", "chwp-char-shape"]) {
     window.addEventListener(name, (event) => void viewer.applyStyle(event?.detail));
   }
@@ -149,6 +194,7 @@ export function startAppViewer(host) {
   window.addEventListener("chwp-selection-action", (event) => viewer.selectionAction(event.detail?.action));
   window.addEventListener("chwp-toggle-overwrite", () => void viewer.toggleOverwrite());
   window.addEventListener("chwp-leave-band", () => void viewer.leaveBand());
+  window.addEventListener("chwp-leave-note", () => void viewer.leaveNote());
   window.addEventListener("chwp-page-grid", (event) => viewer.pageGrid(event.detail));
   window.addEventListener("chwp-rulers", () => void viewer.toggleRulers());
   window.addEventListener("chwp-zoom-dialog", (event) => void viewer.zoomDialog(event.detail || {}));

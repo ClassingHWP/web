@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Minus, Plus, X } from "lucide-react";
+import { tableEdit } from "./ui-actions.js";
 
 // 표 만들기. 줄·칸 개수만 받고, 표 모양(너비 단에 맞춤·글자처럼 취급·테두리)은 코어(editInsertTable)가 정한다.
 // 리본·메뉴는 openTableDialog 로 연다.
 
-export function openTableDialog() {
-  window.dispatchEvent(new Event("chwp-open-table-dialog"));
+// mode 가 split 이면 셀 나누기(줄·칸 수를 받아 캐럿 칸을 나눈다)다.
+export function openTableDialog(mode = "insert") {
+  window.dispatchEvent(new CustomEvent("chwp-open-table-dialog", { detail: { mode: mode === "split" ? "split" : "insert" } }));
 }
 
 const clampCount = (value, max) => {
@@ -43,15 +45,22 @@ export function TableDialog() {
   const [rows, setRows] = useState(1);
   const [cols, setCols] = useState(1);
   const [limits, setLimits] = useState({ rows: 1, cols: 1 });
+  const [mode, setMode] = useState("insert");
 
   useEffect(() => {
-    // 처음 줄·칸 수와 한도는 코어가 준다.
-    const onOpen = () => {
+    // 처음 줄·칸 수와 한도는 코어가 준다. 셀 나누기는 한글처럼 1줄 2칸에서 시작한다.
+    const onOpen = (event) => {
+      const next = event?.detail?.mode === "split" ? "split" : "insert";
+      setMode(next);
+      if (next === "split") {
+        setRows(1);
+        setCols(2);
+      }
       setOpen(true);
       void window.__chwpFormatView?.(3, {}).then((view) => {
         if (!view) return;
-        setRows(view.values.rows);
-        setCols(view.values.cols);
+        setRows(next === "split" ? 1 : view.values.rows);
+        setCols(next === "split" ? 2 : view.values.cols);
         setLimits({ rows: view.specs.rows?.max ?? 1, cols: view.specs.cols?.max ?? 1 });
       });
     };
@@ -68,6 +77,10 @@ export function TableDialog() {
     const r = clampCount(rows, limits.rows);
     const c = clampCount(cols, limits.cols);
     close();
+    if (mode === "split") {
+      tableEdit("splitCell", { rows: r, cols: c });
+      return;
+    }
     if (typeof window.__chwpInsertTable === "function") void window.__chwpInsertTable(r, c);
   };
 
@@ -85,10 +98,10 @@ export function TableDialog() {
             }
           }}
         >
-          <DialogPrimitive.Description className="sr-only">넣을 표의 줄과 칸 개수를 정합니다.</DialogPrimitive.Description>
+          <DialogPrimitive.Description className="sr-only">{mode === "split" ? "칸을 나눌 줄과 칸 개수를 정합니다." : "넣을 표의 줄과 칸 개수를 정합니다."}</DialogPrimitive.Description>
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
             <div className="flex items-center">
-              <DialogPrimitive.Title className="flex-1 text-[20px] font-bold">표 만들기</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="flex-1 text-[20px] font-bold">{mode === "split" ? "셀 나누기" : "표 만들기"}</DialogPrimitive.Title>
               <button type="button" className="ui-ghost flex size-12 items-center justify-center rounded-[10px] lg:hidden" aria-label="닫기" onClick={close}>
                 <X className="size-6" />
               </button>
@@ -100,7 +113,7 @@ export function TableDialog() {
             </fieldset>
           </div>
           <div className="flex shrink-0 flex-row-reverse gap-2 border-t border-[#e5e5e5] pt-3 lg:w-[104px] lg:flex-col lg:border-0 lg:pt-11">
-            <button type="button" className="ui-primary h-[54px] flex-1 rounded-[10px] lg:h-11 lg:flex-none lg:rounded-lg" onClick={apply}>만들기(D)</button>
+            <button type="button" className="ui-primary h-[54px] flex-1 rounded-[10px] lg:h-11 lg:flex-none lg:rounded-lg" onClick={apply}>{mode === "split" ? "나누기(D)" : "만들기(D)"}</button>
             <button type="button" className="ui-outline h-[54px] flex-1 rounded-[10px] lg:h-11 lg:flex-none lg:rounded-lg" onClick={close}>취소</button>
           </div>
         </DialogPrimitive.Content>

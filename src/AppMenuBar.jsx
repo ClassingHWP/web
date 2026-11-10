@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowDownAZ,
   ALargeSmall,
   ChevronDown,
   ClipboardPaste,
@@ -33,15 +34,35 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { FormatBar } from "./FormatBar.jsx";
+import { applyStyle, FormatBar, useStyleNames } from "./FormatBar.jsx";
 import { useZoomState, ZoomDialog } from "./ZoomDialog.jsx";
-import { bandTab, RibbonFrame, ribbonMenuItems, ribbonTabs } from "./Ribbon.jsx";
+import { openBlockCalcDialog } from "./BlockCalcDialog.jsx";
+import { openProofMarkDialog } from "./ProofMarkDialog.jsx";
+import { bandTab, masterTab, noteTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
 import { FormatDialogs, openFormatDialog } from "./FormatDialogs.jsx";
 import { openTableDialog } from "./TableDialog.jsx";
+import { openFindDialog } from "./FindDialog.jsx";
+import { openBookmarkDialog, openGoToDialog } from "./BookmarkDialog.jsx";
+import { openComposeDialog, openRubyDialog } from "./GlyphGroupDialog.jsx";
+import { openCaseDialog, openWidthDialog } from "./TextConvertDialog.jsx";
+import { openSortDialog } from "./TableSortDialog.jsx";
+import { runShortcut } from "./ui-actions.js";
+import { openDeleteMarksDialog } from "./DeleteMarksDialog.jsx";
+import { openHeaderFooterDialog } from "./HeaderFooterDialog.jsx";
 import { MobileFooter, MobileHeader, MobileMenuSheet } from "./MobileChrome.jsx";
 import { Toaster } from "./Toast.jsx";
 import { AboutDialog, openAbout } from "./AboutDialog.jsx";
-import { drawShape, newDocument, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useOverwrite, useRulersShown, useWide } from "./ui-actions.js";
+import { openPageDialog } from "./PageDialogs.jsx";
+import { openSymbolDialog } from "./SymbolDialog.jsx";
+import { openNoteShapeDialog } from "./NoteShapeDialog.jsx";
+import { openSectionDialog } from "./SectionDialog.jsx";
+import { openMasterPageDialog } from "./MasterPageDialog.jsx";
+import { openLineNumberDialog } from "./LineNumberDialog.jsx";
+import { openDeletePageDialog } from "./DeletePageDialog.jsx";
+import { openTablePropertiesDialog } from "./TablePropertiesDialog.jsx";
+import { openColumnDialog } from "./ColumnDialog.jsx";
+import { openGridDialog, openMoveGuideDialog } from "./GuideDialogs.jsx";
+import { applyViewGuides, drawShape, insertBreak, newDocument, toggleFullScreen, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useInTable, useMaster, useNote, useOverwrite, useRulersShown, useViewGuides, useWide } from "./ui-actions.js";
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -50,6 +71,9 @@ import {
   MenubarMenu,
   MenubarSeparator,
   MenubarShortcut,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger,
 } from "@/components/ui/menubar";
 
@@ -79,27 +103,48 @@ const menus = [
       { label: "오려두기", Icon: Scissors, command: "cut", onSelect: () => selectionAction("cut") },
       { label: "복사하기", Icon: Copy, command: "copy", onSelect: () => selectionAction("copy") },
       { label: "붙여넣기", Icon: ClipboardPaste, command: "paste", onSelect: () => selectionAction("paste") },
+      { label: "모양 복사...", Icon: Type, command: "copyShape", onSelect: () => runShortcut("copyShape") },
+      { label: "조판 부호 지우기...", Icon: X, onSelect: openDeleteMarksDialog },
       { type: "separator" },
-      { label: "찾기 및 바꾸기", Icon: Search },
+      { label: "찾기 및 바꾸기", Icon: Search, command: "findDialog", onSelect: openFindDialog },
+      { label: "찾아가기...", Icon: Search, command: "goToDialog", onSelect: openGoToDialog },
+      { label: "대문자/소문자 바꾸기...", Icon: Type, onSelect: openCaseDialog },
+      { label: "전각/반각 바꾸기...", Icon: Type, onSelect: openWidthDialog },
+      { label: "정렬...", Icon: ArrowDownAZ, onSelect: openSortDialog },
     ],
   },
   {
     label: "보기",
     items: [
       { label: "눈금자", Icon: Ruler, type: "rulers", onSelect: toggleRulers },
-      { label: "격자", Icon: Grid3x3 },
+      { label: "격자 보기", Icon: Grid3x3, type: "guide", key: "gridShow", onSelect: () => applyViewGuides({ toggle: "grid" }) },
+      { label: "격자 설정...", Icon: Grid3x3, onSelect: openGridDialog },
+      { label: "그리기 안내선 보기", Icon: Grid3x3, type: "guide", key: "drawGuides", onSelect: () => applyViewGuides({ toggle: "drawGuides" }) },
+      { label: "개체 이동 안내선 보기", Icon: Grid3x3, type: "guide", key: "moveGuides", onSelect: () => applyViewGuides({ toggle: "moveGuides" }) },
+      { label: "개체 이동 안내선 설정...", Icon: Grid3x3, onSelect: openMoveGuideDialog },
       { label: "쪽 윤곽", Icon: FileText },
       { type: "separator" },
-      { label: "전체 화면", Icon: Scan },
+      { label: "문단 부호", Icon: FileText, type: "guide", key: "paraMarks", onSelect: () => applyViewGuides({ toggle: "paraMarks" }) },
+      { label: "조판 부호", Icon: FileText, type: "guide", key: "ctrlMarks", onSelect: () => applyViewGuides({ toggle: "ctrlMarks" }) },
+      { label: "투명 선", Icon: Grid3x3, type: "guide", key: "transparentLines", onSelect: () => applyViewGuides({ toggle: "transparentLines" }) },
+      { label: "교정 부호", Icon: FileText, type: "guide", key: "proofMarks", onSelect: () => applyViewGuides({ toggle: "proofMarks" }) },
+      { label: "메모", Icon: FileText, type: "guide", key: "memos", onSelect: () => applyViewGuides({ toggle: "memos" }) },
+      { type: "separator" },
+      { label: "전체 화면", Icon: Scan, onSelect: toggleFullScreen },
     ],
   },
   {
     label: "입력",
     items: [
       { label: "표...", Icon: Table, onSelect: openTableDialog },
+      { label: "표/셀 속성...", Icon: Table, onSelect: openTablePropertiesDialog },
       { label: "그림...", Icon: Image, onSelect: pickPicture },
       { label: "글상자", Icon: Type, onSelect: () => drawShape(4) },
-      { label: "문자표...", Icon: Omega },
+      { label: "문자표...", Icon: Omega, onSelect: openSymbolDialog },
+      { label: "책갈피...", Icon: Type, command: "bookmarkDialog", onSelect: openBookmarkDialog },
+      { label: "덧말 넣기...", Icon: Type, onSelect: openRubyDialog },
+      { label: "글자 겹치기...", Icon: Type, onSelect: openComposeDialog },
+      { label: "각주/미주 모양...", Icon: Type, onSelect: () => openNoteShapeDialog(false) },
     ],
   },
   {
@@ -107,20 +152,36 @@ const menus = [
     items: [
       { label: "글자 모양...", Icon: ALargeSmall, command: "charDialog", onSelect: () => openFormatDialog("char") },
       { label: "문단 모양...", Icon: Pilcrow, command: "paraDialog", onSelect: () => openFormatDialog("para") },
-      { label: "스타일...", Icon: Palette },
+      { label: "스타일", Icon: Palette, type: "styles" },
     ],
   },
   {
     label: "쪽",
     items: [
-      { label: "쪽 나누기", Icon: SeparatorHorizontal },
-      { label: "단 나누기", Icon: Columns2 },
+      { label: "쪽 나누기", Icon: SeparatorHorizontal, command: "breakPage", onSelect: () => insertBreak("page") },
+      { label: "단 나누기", Icon: Columns2, command: "breakColumn", onSelect: () => insertBreak("column") },
+      { label: "쪽 지우기...", Icon: FileCog, onSelect: openDeletePageDialog },
       { type: "separator" },
       { label: "편집 용지...", Icon: FileCog, command: "pageDialog", onSelect: () => openFormatDialog("page") },
-      { label: "쪽 번호...", Icon: Hash },
+      { label: "머리말/꼬리말...", Icon: FileCog, command: "headerFooterDialog", onSelect: openHeaderFooterDialog },
+      { label: "쪽 번호...", Icon: Hash, onSelect: () => openPageDialog("pageNumber") },
+      { label: "바탕쪽...", Icon: FileCog, onSelect: openMasterPageDialog },
+      { label: "줄 번호 설정...", Icon: Hash, onSelect: openLineNumberDialog },
+      { label: "쪽 테두리/배경...", Icon: FileCog, onSelect: () => openFormatDialog("pageBorder") },
+      { label: "단 설정...", Icon: Columns2, onSelect: openColumnDialog },
+      { label: "구역 설정...", Icon: FileCog, onSelect: openSectionDialog },
     ],
   },
   { label: "보안", items: ribbonMenuItems("보안") },
+  {
+    label: "도구",
+    items: [
+      { label: "블록 합계...", Icon: Hash, onSelect: () => openBlockCalcDialog("sum") },
+      { label: "블록 평균...", Icon: Hash, onSelect: () => openBlockCalcDialog("average") },
+      { type: "separator" },
+      { label: "교정 부호 넣기...", Icon: FileText, onSelect: () => openProofMarkDialog() },
+    ],
+  },
 ];
 
 function FitWidthMark() {
@@ -221,7 +282,7 @@ const docStateText = { dirty: "저장하지 않은 변경 있음", saved: "변�
 // 단·줄·칸·구역은 코어가 캐럿 자리로 알려 준다(chwp-caret-status).
 // #root 는 세로 flex 라서 order 로 문서 영역 아래에 둔다.
 function StatusBar() {
-  const [page, setPage] = useState({ page: 0, count: 0 });
+  const [page, setPage] = useState({ page: 0, count: 0, counting: false });
   const [caret, setCaret] = useState(null);
   const [docState, setDocState] = useState("clean");
 
@@ -230,7 +291,7 @@ function StatusBar() {
       const detail = event.detail || {};
       const count = Number(detail.pageCount) || 0;
       const index = Number.isFinite(Number(detail.page)) && Number(detail.page) > 0 ? Number(detail.page) : (Number(detail.pageIndex) || 0) + 1;
-      if (count > 0) setPage({ page: Math.min(index, count), count });
+      if (count > 0) setPage({ page: Math.min(index, count), count, counting: !!detail.pageCounting });
     };
     const onCaret = (event) => {
       const detail = event.detail;
@@ -252,7 +313,7 @@ function StatusBar() {
   return (
     <footer data-toast-floor="" className="toolbar-ui ui-chrome flex shrink-0 flex-wrap items-center gap-x-[1.4em] border-t border-[#e5e5e5] bg-white pr-[0.6em] pl-[1em]" style={{ order: 1 }}>
       <div className="flex flex-wrap items-center gap-x-[1.4em] text-[0.9em] text-[#404040]">
-        {page.count > 0 ? <span>{page.page} / {page.count}쪽</span> : null}
+        {page.count > 0 ? <span>{page.page} / {page.count}쪽{page.counting ? " (세는 중)" : ""}</span> : null}
         {caret?.band ? (
           <span className="font-medium text-[#1d4ed8]">{caret.band === 1 ? "머리말" : "꼬리말"} 편집 중 · Shift+Esc 로 나가기</span>
         ) : null}
@@ -275,6 +336,20 @@ function StatusBar() {
 
 // 시안에 없는 기능을 눌렀을 때 화면 아래에 잠깐 뜨는 알림.
 const menuItemClass = "h-[2.3em] gap-3 rounded-[6px] px-3 text-[1em] data-disabled:text-[#a3a3a3]";
+
+// 격자·안내선 보기 켜고 끄기. 켠 값은 코어가 들고 있고 바뀌면 chwp-guides-changed 로 알린다.
+function GuideEntry({ item }) {
+  const fields = useViewGuides();
+  return (
+    <MenubarCheckboxItem
+      checked={!!fields?.[item.key]}
+      onCheckedChange={() => item.onSelect?.()}
+      className="h-[2.3em] gap-3 rounded-[6px] py-0 pr-3 pl-[2.4em] text-[1em] [&>span:first-child]:left-3 [&>span:first-child]:size-[1.1em] [&_svg]:size-[1.1em]"
+    >
+      {item.label}
+    </MenubarCheckboxItem>
+  );
+}
 
 function RulersEntry({ item }) {
   const on = useRulersShown();
@@ -300,7 +375,10 @@ function keyLabel(binding) {
   if (binding.alt) parts.push(isMac ? "⌥" : "Alt");
   if (binding.shift === 1) parts.push(isMac ? "⇧" : "Shift");
   parts.push(key);
-  return parts.join(isMac ? "" : "+");
+  const lead = parts.join(isMac ? "" : "+");
+  // 두 번 누르는 단축키는 한글처럼 "Ctrl+K,B" 로 적는다.
+  const next = String(binding.next || "").replace(/^Key/, "").replace(/^Digit/, "");
+  return next ? `${lead},${next}` : lead;
 }
 
 function useKeyBindings() {
@@ -313,10 +391,33 @@ function useKeyBindings() {
   return list;
 }
 
+// 문서 스타일을 펼치는 하위 메뉴. 고르면 코어가 그 이름의 스타일을 입힌다.
+function StylesEntry({ item }) {
+  const names = useStyleNames();
+  const Icon = item.Icon;
+  return (
+    <MenubarSub>
+      <MenubarSubTrigger className={menuItemClass}>
+        {Icon ? <Icon className="size-[1.1em] text-[#737373]" strokeWidth={2} /> : <span className="size-[1.1em]" />}
+        <span className="flex-1">{item.label}</span>
+      </MenubarSubTrigger>
+      <MenubarSubContent className="toolbar-ui ui-chrome max-h-[60vh] overflow-y-auto">
+        {names.map((name) => (
+          <MenubarItem key={name} className={menuItemClass} onSelect={() => applyStyle({ styleName: name })}>
+            <span className="flex-1">{name}</span>
+          </MenubarItem>
+        ))}
+      </MenubarSubContent>
+    </MenubarSub>
+  );
+}
+
 function MenuEntry({ item }) {
   const bindings = useKeyBindings();
   if (item.type === "separator") return <MenubarSeparator className="my-1 bg-[#e5e5e5]" />;
   if (item.type === "rulers") return <RulersEntry item={item} />;
+  if (item.type === "guide") return <GuideEntry item={item} />;
+  if (item.type === "styles") return <StylesEntry item={item} />;
   const Icon = item.Icon;
   const shortcut = item.command ? keyLabel(bindings.find((binding) => binding.command === item.command)) : "";
   return (
@@ -366,7 +467,22 @@ export function AppMenuBar() {
   const band = useBand();
   const [bandPicked, setBandPicked] = useState(false);
   useEffect(() => setBandPicked(band > 0), [band]);
-  const shown = band > 0 && bandPicked ? bandTab : ribbon;
+  // 표 칸 안에 들어가면 표 디자인·표 레이아웃 탭이 생긴다. 고른 탭을 보이고, 표에서 나오면 원래 탭으로 돌아간다.
+  const inTable = useInTable();
+  const [tablePicked, setTablePicked] = useState("");
+  useEffect(() => {
+    if (!inTable) setTablePicked("");
+  }, [inTable]);
+  // 각주·미주에 들어가면 주석 탭을 고른다. 나오면 원래 탭으로 돌아간다.
+  const note = useNote();
+  const [notePicked, setNotePicked] = useState(false);
+  useEffect(() => setNotePicked(note > 0), [note]);
+  // 바탕쪽 편집에 들어가면 바탕쪽 탭을 고른다. 나오면 원래 탭으로 돌아간다.
+  const master = useMaster();
+  const [masterPicked, setMasterPicked] = useState(false);
+  useEffect(() => setMasterPicked(master), [master]);
+  const shown = master && masterPicked ? masterTab : band > 0 && bandPicked ? bandTab : note > 0 && notePicked ? noteTab
+    : inTable && tablePicked ? tablePicked : ribbon;
 
   useEffect(() => {
     const el = headerRef.current;
@@ -380,8 +496,10 @@ export function AppMenuBar() {
 
   function pickRibbon(label) {
     setOpenMenu("");
-    const fromBand = band > 0 && bandPicked;
+    const fromBand = (band > 0 && bandPicked) || (note > 0 && notePicked) || (inTable && tablePicked);
     setBandPicked(false);
+    setNotePicked(false);
+    setTablePicked("");
     setRibbon((current) => {
       const next = current === label && !fromBand ? "" : label;
       storeRibbon(next);
@@ -399,9 +517,15 @@ export function AppMenuBar() {
           <MobileHeader
             tab={mobileTab}
             band={band}
+            note={note}
+            master={master}
+            table={inTable}
             onTab={(label) => {
+              setMasterPicked(label === masterTab);
               setBandPicked(label === bandTab);
-              if (label === bandTab) return;
+              setNotePicked(label === noteTab);
+              setTablePicked(tableTabs.includes(label) ? label : "");
+              if (label === masterTab || label === bandTab || label === noteTab || tableTabs.includes(label)) return;
               setRibbon(label);
               storeRibbon(label);
             }}
@@ -434,6 +558,23 @@ export function AppMenuBar() {
               </MenubarMenu>
             ))}
             <div role="tablist" aria-label="메뉴" className="flex items-center gap-[0.15em] rounded-[0.55em] bg-[#f5f5f5] p-[0.1em]">
+              {master ? (
+                <div className={`flex items-center rounded-[0.45em] ${shown === masterTab ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={shown === masterTab}
+                    title="바탕쪽 편집 중 (Shift+Esc 로 나가기)"
+                    className={`h-[1.65em] px-[0.8em] text-[#1d4ed8] ${shown === masterTab ? "font-medium" : ""}`}
+                    onClick={() => {
+                      setOpenMenu("");
+                      setMasterPicked(true);
+                    }}
+                  >
+                    {masterTab}
+                  </button>
+                </div>
+              ) : null}
               {band > 0 ? (
                 <div className={`flex items-center rounded-[0.45em] ${shown === bandTab ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
                   <button
@@ -451,6 +592,40 @@ export function AppMenuBar() {
                   </button>
                 </div>
               ) : null}
+              {note > 0 ? (
+                <div className={`flex items-center rounded-[0.45em] ${shown === noteTab ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={shown === noteTab}
+                    className={`h-[1.65em] px-[0.8em] text-[#1d4ed8] ${shown === noteTab ? "font-medium" : ""}`}
+                    onClick={() => {
+                      setOpenMenu("");
+                      setNotePicked(true);
+                    }}
+                  >
+                    {noteTab}
+                  </button>
+                </div>
+              ) : null}
+              {inTable
+                ? tableTabs.map((name) => (
+                    <div key={name} className={`flex items-center rounded-[0.45em] ${shown === name ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={shown === name}
+                        className={`h-[1.65em] px-[0.8em] whitespace-nowrap text-[#1d4ed8] ${shown === name ? "font-medium" : ""}`}
+                        onClick={() => {
+                          setOpenMenu("");
+                          setTablePicked(name);
+                        }}
+                      >
+                        {name}
+                      </button>
+                    </div>
+                  ))
+                : null}
               {menus.slice(1).map((menu) => {
                 const selected = shown === menu.label;
                 return (

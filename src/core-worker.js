@@ -103,9 +103,11 @@ function readBar(bar) {
 }
 
 // 값과 기본값은 코어가 다 채운다. 여기서는 embind 객체를 보낼 수 있는 꼴로 옮긴다.
+// 모양이 앞서 보낸 것과 같으면 코어는 styleChanged:false 와 (바뀐 때만) caret 만 준다.
 function readCursorStyle(st) {
   if (!st || typeof st !== "object") return null;
-  return { ...st, fontSizeIn: { ...(st.fontSizeIn || {}) }, mixed: readMixed(st.mixed), caret: readCaretStatus(st.caret) };
+  if (st.styleChanged === false) return { styleChanged: false, caret: readCaretStatus(st.caret) };
+  return { ...st, styleChanged: true, fontSizeIn: { ...(st.fontSizeIn || {}) }, mixed: readMixed(st.mixed), caret: readCaretStatus(st.caret) };
 }
 
 // 블록 안에서 섞인 값. 셸은 그 칸을 비운다.
@@ -115,6 +117,8 @@ function readMixed(mixed) {
   for (const key of ["style", "font", "fontSize", "bold", "italic", "underline", "strikeout", "color", "align", "lineSpacing"]) {
     out[key] = !!mixed[key];
   }
+  // 언어별 글꼴이 섞였는가(서식 막대 언어 칸). 언어 차례는 코어 langFonts 와 같다.
+  out.langFonts = Array.from(mixed.langFonts || [], (on) => !!on);
   return out;
 }
 
@@ -550,6 +554,7 @@ self.onmessage = async (event) => {
           pageStepY: camera.pageStepY | 0,
           page: camera.page | 0,
           pageCount: camera.pageCount | 0,
+          pageCounting: !!camera.pageCounting,
           ownsScroll: !!camera.ownsScroll,
           settled: !!camera.settled,
           needsTick: !!camera.needsTick,
@@ -570,6 +575,7 @@ self.onmessage = async (event) => {
           docState: typeof camera.docState === "string" ? camera.docState : "",
           needsFontSwap: !!camera.needsFontSwap,
           pinTap: !!camera.pinTap,
+          dialog: typeof camera.dialog === "string" ? camera.dialog : "",
           active: !!camera.active,
           caret: !!camera.caret,
           cursorStyle: camera.select ? readCursorStyle(camera.cursorStyle) : null,
@@ -626,6 +632,11 @@ self.onmessage = async (event) => {
         result: {
           handled: !!packed?.handled,
           documentChanged: !!packed?.documentChanged,
+          error: typeof packed?.error === "string" ? packed.error : "",
+          notice: typeof packed?.notice === "string" ? packed.notice : "",
+          dialog: typeof packed?.dialog === "string" ? packed.dialog : "",
+          count: packed?.count | 0,
+          found: !!packed?.found,
           fullInvalidation: !!packed?.fullInvalidation,
           canUndo: !!packed?.canUndo,
           canRedo: !!packed?.canRedo,
@@ -709,6 +720,211 @@ self.onmessage = async (event) => {
     if (msg.op === "editInsertTable") {
       await fontsReady;
       const packed = chwp.editInsertTable(msg.rows | 0, msg.cols | 0);
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editShortcut") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editShortcut(String(msg.command)));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editInsertBreak") {
+      await fontsReady;
+      const packed = chwp.editInsertBreak(String(msg.kind));
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editInsertHyperlink") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editInsertHyperlink(String(msg.text ?? ""), String(msg.url ?? "")));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editNoteShape") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editNoteShape(msg.fields || {}, !!msg.endnote, !!msg.whole));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "noteShapeView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.noteShapeView(!!msg.endnote) });
+      return;
+    }
+    if (msg.op === "editCaption") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editCaption(String(msg.caption)));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editBookmark") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editBookmark(String(msg.action), String(msg.name ?? ""), String(msg.newName ?? "")));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editGoTo") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editGoTo(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editDeleteMarks") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editDeleteMarks(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editTableText") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editTableText(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editCopyShape") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editCopyShape(String(msg.action), Number(msg.type) | 0));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editExchangeNotes") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editExchangeNotes(Number(msg.mode) | 0));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "goToView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.goToView() });
+      return;
+    }
+    if (msg.op === "editGoToSection") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editGoToSection(Number(msg.section) | 0));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editGoToPage") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editGoToPage(Number(msg.page) | 0));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "bookmarkView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.bookmarkView() });
+      return;
+    }
+    if (msg.op === "editTableProperties") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editTableProperties(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editGlyphGroup") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editGlyphGroup(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editConvertText") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editConvertText(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editSortParagraphs") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editSortParagraphs(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "tableFormulaView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.tableFormulaView() });
+      return;
+    }
+    if (msg.op === "sortView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.sortView(msg.fields || {}) });
+      return;
+    }
+    if (msg.op === "glyphGroupView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.glyphGroupView() });
+      return;
+    }
+    if (msg.op === "tablePropertiesView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.tablePropertiesView() });
+      return;
+    }
+    if (msg.op === "editSectionSettings") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editSectionSettings(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "sectionSettingsView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.sectionSettingsView() });
+      return;
+    }
+    if (msg.op === "editColumns") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editColumns(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "viewGuides") {
+      self.postMessage({ id: msg.id, ok: true, result: chwp.viewGuides(msg.fields || {}) });
+      return;
+    }
+    if (msg.op === "applyViewGuides") {
+      self.postMessage({ id: msg.id, ok: true, result: chwp.applyViewGuides(msg.fields || {}) });
+      return;
+    }
+    if (msg.op === "columnView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.columnView(msg.fields || {}) });
+      return;
+    }
+    if (msg.op === "editInsertNote") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editInsertNote(!!msg.endnote));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editPageControl") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editPageControl(String(msg.kind), msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "pageControlFields") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.pageControlFields(String(msg.kind)) });
+      return;
+    }
+    if (msg.op === "editFindReplace") {
+      await fontsReady;
+      const packed = chwp.editFindReplace(String(msg.mode), String(msg.text ?? ""), String(msg.replacement ?? ""), !!msg.matchCase);
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editTableFields") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editTableFields(String(msg.kind), msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editTable") {
+      await fontsReady;
+      const packed = chwp.editTable(String(msg.kind), !!msg.after, msg.count | 0, msg.rows | 0, msg.cols | 0, String(msg.border ?? ""), String(msg.color ?? ""), String(msg.lineType ?? ""), msg.lineWidth | 0, String(msg.lineColor ?? ""));
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;

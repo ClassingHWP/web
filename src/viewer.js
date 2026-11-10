@@ -22,7 +22,7 @@ import { attachEditor } from "./editor.js";
 //              기본은 우리 글꼴 서버(DEFAULT_FONTS)다. 우리 목록을 받아 고쳐 넘겨도 된다.
 //   nogpu, measured, cacheBudget  개발용(GPU 끄기, 측정 줄 높이, "pageGpu:8000000" 캐시 예산)
 //
-// 알림(addEventListener, detail): status {text}, viewport, zoom, docstate {state, name}, cursorstyle, caretstatus,
+// 알림(addEventListener, detail): status {text}, notice {text}, viewport, zoom, docstate {state, name}, cursorstyle, caretstatus,
 // fontlist, stylelist, colors, keybindings, zoomspec, rulers {on}, editbutton {shown}, toast {text, kind, action},
 // fontswapask {swaps}, selectionmenu {x, y, readOnly}, formatdialog {name}, saverequest, openrequest,
 // opened (코어 입력 답, 쪽은 0부터), openfailed {error}.
@@ -101,6 +101,7 @@ export function createViewer(host, options = {}) {
     keyBindings: [],
     zoomSpec: null,
     rulers: null,
+    guides: null,
     editButton: false,
   };
   const infoKey = {
@@ -173,6 +174,8 @@ export function createViewer(host, options = {}) {
   let openedName = "";
   // 쪽 수와 지금 쪽(0부터). 쪽 목록은 코어 답(쪽 계산, 편집 결과, 카메라)에서 온다.
   let pageCount = 0;
+  // 코어가 쪽을 아직 세는 중인가(열 때 보일 쪽만 먼저 쌓았다).
+  let pageCounting = false;
   let pageIndex = -1;
   let scenePages = [];
 
@@ -206,6 +209,7 @@ export function createViewer(host, options = {}) {
       page: activeIndex >= 0 ? activeIndex + 1 : 1,
       pageIndex: Math.max(0, activeIndex),
       pageCount: Math.max(scenePages.length, pageCount),
+      pageCounting,
       percent: screenPercent,
       fit: fitPageMode ? "page" : (fitWidthMode ? "width" : ""),
       fitPage: fitPageMode,
@@ -230,7 +234,7 @@ export function createViewer(host, options = {}) {
     const activeIndex = pageIndex >= 0 ? pageIndex : index;
     const detail = viewDetail(activeIndex);
     // 스크롤만 바뀐 것은 알리지 않는다.
-    const key = [detail.page, detail.pageCount, detail.percent, fitPageMode, fitWidthMode,
+    const key = [detail.page, detail.pageCount, detail.pageCounting, detail.percent, fitPageMode, fitWidthMode,
       viewGrid.mode, viewGrid.cols, viewGrid.rows].join(":");
     if (key === lastNotified) return;
     lastNotified = key;
@@ -490,13 +494,32 @@ export function createViewer(host, options = {}) {
 
   // 단축키 표는 코어가 준다(keyBindings). 키를 누른 그 순간 기본 동작을 막아야 해서 미리 받아 둔다.
   let keyTable = [];
+  // 키가 사는 캐럿 상태(when)는 코어가 표에 적고, 그 상태 값도 코어가 준다(caretstatus).
+  let caretState = {};
+  // 두 번 누르는 단축키는 코어 표의 next 다. 앞 키를 맞추면 그 키를 기억해 두고 다음 키로 표를 맞춘다.
+  let chordLead = null;
   function findKey(event) {
     const ctrl = !!(event.ctrlKey || event.metaKey);
     const alt = !!event.altKey;
     const shift = event.shiftKey ? 1 : 0;
-    return keyTable.find((item) =>
-      (item.key === event.code || item.key === event.key) && item.ctrl === ctrl && item.alt === alt &&
+    const same = (item) => (item.key === event.code || item.key === event.key);
+    if (chordLead) {
+      const lead = chordLead;
+      if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return null;
+      chordLead = null;
+      // 다음 키는 앞 키의 Ctrl·Alt 를 쥔 채로도, 놓고도 누를 수 있다.
+      return keyTable.find((item) => item.next && item.key === lead.key && item.ctrl === lead.ctrl && item.alt === lead.alt &&
+        (item.next === event.code || item.next === event.key) && (!ctrl || item.ctrl) && (!alt || item.alt) &&
+        (!item.when || !!caretState[item.when])) || null;
+    }
+    const plain = keyTable.find((item) => !item.next &&
+      same(item) && item.ctrl === ctrl && item.alt === alt &&
+      (item.shift < 0 || item.shift === shift) && (!item.when || !!caretState[item.when]));
+    if (plain) return plain;
+    const lead = keyTable.find((item) => item.next && same(item) && item.ctrl === ctrl && item.alt === alt &&
       (item.shift < 0 || item.shift === shift));
+    if (lead) return { command: "chordLead", key: lead.key, ctrl, alt };
+    return null;
   }
   void coreReady.then(() => session.keyBindings()).then((list) => {
     if (Array.isArray(list)) keyTable = list;
@@ -512,15 +535,29 @@ export function createViewer(host, options = {}) {
     emit("docstate", { state, name: openedName });
   }
 
+  // 코어는 바뀐 것만 준다: 모양이 같으면 styleChanged 가 거짓이고, 캐럿 상태가 같으면 caret 이 없다.
+  // 알림도 바뀐 것만 낸다. 지금 모양(cursorStyleNow)은 늘 마지막 캐럿 상태를 품는다.
+  let cursorStyleNow = null;
   function emitCursorStyle(cursorStyle) {
     if (!cursorStyle || typeof cursorStyle !== "object") return;
-    emit("cursorstyle", cursorStyle);
-    if (cursorStyle.caret) emit("caretstatus", cursorStyle.caret);
+    const caret = cursorStyle.caret || null;
+    if (caret) caretState = caret;
+    if (cursorStyle.styleChanged !== false) {
+      cursorStyleNow = { ...cursorStyle, caret: caret || cursorStyleNow?.caret || null };
+      emit("cursorstyle", cursorStyleNow);
+    } else if (caret && cursorStyleNow) {
+      cursorStyleNow.caret = caret;
+    }
+    if (caret) emit("caretstatus", caret);
   }
 
   // 쪽 수는 코어가 알린다(편집 결과의 쪽 목록, 카메라의 pageCount). 글꼴이 들어와 다시 놓거나 글이 쪽을 넘겨도 맞춘다.
-  function showPageCount(count) {
+  function showPageCount(count, counting = false) {
     const next = count | 0;
+    if (next > 0 && !!counting !== pageCounting) {
+      pageCounting = !!counting;
+      syncViewportInfo();
+    }
     if (next <= 0 || next === pageCount) return;
     pageIndex = Math.min(Math.max(0, pageIndex), next - 1);
     pageCount = next;
@@ -588,6 +625,8 @@ export function createViewer(host, options = {}) {
     else showCaret(null);
     if (restartCaret && caretImage) blinkCaret();
     if (result?.active || result?.caret) editor.focusInput();
+    // 덧말·글자 겹치기를 두 번 누르면 코어가 고른 고치기 대화 상자를 연다.
+    if (result?.dialog) emit("formatdialog", { name: result.dialog });
     // 블록 마커를 끌지 않고 누르면 그 자리에 복사·잘라내기 메뉴를 띄운다.
     if (result?.pinTap && selectedText) {
       emit("selectionmenu", { x: lastPressClient.x, y: lastPressClient.y, readOnly });
@@ -832,6 +871,12 @@ export function createViewer(host, options = {}) {
     // 편집 입력칸에서만 쓰는 키(Esc)는 입력칸이 받는다. 위에 뜬 대화 상자가 먼저 닫을 수 있게 둔다.
     if (foreign || binding.editorOnly) return;
     const command = binding.command;
+    // 두 번 누르는 단축키의 앞 키다. 다음 키를 기다린다.
+    if (command === "chordLead") {
+      event.preventDefault();
+      chordLead = binding;
+      return;
+    }
     // 붙여 넣기는 플랫폼이 입력칸에 붙여 넣기 사건으로 준다(입력칸 paste 사건). 기본 동작을 막지 않는다.
     if (command === "paste") return;
     if (command === "cut" || command === "open" || command === "save") {
@@ -859,6 +904,13 @@ export function createViewer(host, options = {}) {
       selectionAction(command);
     } else if (command === "pageDown" || command === "pageUp") {
       stepPageView(command === "pageDown" ? 1 : -1);
+    } else {
+      // 나머지는 코어 편집 명령이다. 코어가 열 대화 상자를 주면 연다(다시 찾기에 찾은 글이 없을 때 등).
+      void editor.shortcut(command).then((result) => {
+        if (result?.dialog) emit("formatdialog", { name: result.dialog });
+        if (result?.notice) emit("notice", { text: result.notice });
+        if (result && !result.documentChanged && result.error) emit("notice", { text: result.error });
+      });
     }
   }, true);
 
@@ -885,6 +937,35 @@ export function createViewer(host, options = {}) {
     }
     emit("rulers", { on: info.rulers });
   }
+  // 보기 격자·안내선. 설정과 판단은 코어가 들고, 셸은 코어가 돌려준 값을 알리고 저장해 두었다가 다음에 다시 넘긴다.
+  // 저장한 값이 없으면 빈 값을 넘겨 코어의 처음값을 받는다.
+  const guidesKey = "chwp.viewGuides";
+  function savedGuides() {
+    try {
+      const saved = localStorage.getItem(guidesKey);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  }
+  function takeGuides(fields, store) {
+    if (!fields || typeof fields !== "object") return fields;
+    info.guides = fields;
+    if (store) {
+      try {
+        localStorage.setItem(guidesKey, JSON.stringify(fields));
+      } catch {}
+    }
+    emit("guides", fields);
+    return fields;
+  }
+  function applyViewGuides(fields) {
+    return coreReady.then(() => session.applyViewGuides(fields || {})).then((next) => takeGuides(next, true));
+  }
+  function viewGuides(fields) {
+    return coreReady.then(() => session.viewGuides(fields || {}));
+  }
+  void coreReady.then(() => session.applyViewGuides(savedGuides() || {})).then((next) => takeGuides(next, false));
   // 블록 마커는 따로 설정하지 않는다. 손가락이 주 입력인 화면(pointer: coarse)에서만 켜고,
   // 태블릿에 키보드·마우스를 붙이는 것처럼 주 입력이 바뀌면 따라간다.
   const coarsePointer = window.matchMedia?.("(pointer: coarse)");
@@ -975,7 +1056,7 @@ export function createViewer(host, options = {}) {
     const zoomChanged = screenPercent !== prevPercent || fitPageMode !== prevFitPage || fitWidthMode !== prevFitWidth;
     if (!gestureActive || fromFrame) pinchLive = !!camera.pinching;
     const camPage = Number.isInteger(camera.page) ? (camera.page | 0) : -1;
-    if (sceneReady()) showPageCount(camera.pageCount);
+    if (sceneReady()) showPageCount(camera.pageCount, camera.pageCounting);
     shownScrollX = camera.scrollX | 0;
     shownScrollY = camera.scrollY | 0;
     // 스크롤을 누가 쥐고 있는지·멈췄는지는 코어가 정한다.
@@ -1308,6 +1389,7 @@ export function createViewer(host, options = {}) {
         opening.mark("쪽 계산", layoutStarted, foldPageLog(planned.detail));
         scenePages = Array.isArray(plan.pages) ? plan.pages : [];
         pageCount = scenePages.length;
+        pageCounting = !!plan.counting;
         ensureViewport();
         if (screenAttached) await screenAttached;
         await session.beginGrind();
@@ -1475,6 +1557,8 @@ export function createViewer(host, options = {}) {
     stepZoom: (dir) => sendInput({ type: "zoomStep", dir: Math.sign(Number(dir) || 0) }),
     revealPage: (index) => sendInput({ type: "revealPage", page: index | 0 }),
     toggleRulers: () => sendInput({ type: "rulersToggle" }),
+    viewGuides,
+    applyViewGuides,
     zoomDialog(detail) {
       if (!sceneReady()) return Promise.resolve(null);
       ensureViewport();
@@ -1502,11 +1586,52 @@ export function createViewer(host, options = {}) {
     drawShape: editor.drawShape,
     insertPicture: editor.insertPicture,
     insertTable: editor.insertTable,
+    tableEdit: editor.tableEdit,
+    insertBreak: editor.insertBreak,
+    pageControl: editor.pageControl,
+    insertNote: editor.insertNote,
+    columns: editor.columns,
+    sectionSettings: editor.sectionSettings,
+    tableProperties: editor.tableProperties,
+    bookmark: editor.bookmark,
+    caption: editor.caption,
+    goToPage: editor.goToPage,
+    goToSection: editor.goToSection,
+    goTo: editor.goTo,
+    goToView: editor.goToView,
+    exchangeNotes: editor.exchangeNotes,
+    copyShape: editor.copyShape,
+    tableText: editor.tableText,
+    deleteMarks: editor.deleteMarks,
+    // 메뉴·리본이 단축키와 같은 코어 명령을 부른다. 코어가 열 대화 상자를 주면 연다.
+    shortcut: (command) => editor.shortcut(command).then((result) => {
+      if (result?.dialog) emit("formatdialog", { name: result.dialog });
+      if (result && !result.documentChanged && result.error) emit("notice", { text: result.error });
+      return result;
+    }),
+    bookmarkView: editor.bookmarkView,
+    tablePropertiesView: editor.tablePropertiesView,
+    glyphGroup: editor.glyphGroup,
+    glyphGroupView: editor.glyphGroupView,
+    sortParagraphs: editor.sortParagraphs,
+    sortView: editor.sortView,
+    tableFormulaView: editor.tableFormulaView,
+    convertText: editor.convertText,
+    noteShape: editor.noteShape,
+    noteShapeView: editor.noteShapeView,
+    sectionSettingsView: editor.sectionSettingsView,
+    columnView: editor.columnView,
+    insertHyperlink: editor.insertHyperlink,
+    insertSymbol: editor.insertSymbol,
+    pageControlFields: editor.pageControlFields,
+    findReplace: editor.findReplace,
+    selectedText: () => selectedText,
     applyFontSwap: editor.applyFontSwap,
     cancelFontSwap: editor.cancelFontSwap,
     rememberColor: editor.rememberColor,
     toggleOverwrite: editor.toggleOverwrite,
     leaveBand: editor.leaveBand,
+    leaveNote: editor.leaveNote,
     destroy,
   });
 }
