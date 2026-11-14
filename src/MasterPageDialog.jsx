@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Frame, focusEditor, useOpen } from "./TableTextDialog.jsx";
 import { pageControl, pageControlFields } from "./ui-actions.js";
 
-// 바탕쪽(한글 2024): 종류(양쪽·홀수 쪽·짝수 쪽·현재 구역의 마지막 쪽·현재 구역 안 임의 쪽),
+// 바탕쪽(한글 2024 MasterPageDlg): 종류(양쪽·홀수 쪽·짝수 쪽·현재 구역의 마지막 쪽·현재 구역 안 임의 쪽),
 // 기존 바탕쪽과 겹치게 하기, 인쇄할 때 바탕쪽 맨 위로 보내기. 설정하면 그 바탕쪽 편집으로 들어간다.
 // 없는 종류면 만들고, 있으면 그것을 연다(코어 pageControl masterPage).
 

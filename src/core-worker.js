@@ -370,6 +370,10 @@ async function boot(fontConfig) {
   chwp.onCamera = (camera) => {
     self.postMessage({ camera });
   };
+  // 하이퍼링크 웹 주소. 무엇을 열지는 코어가 정했다. 창은 메인 스레드만 열 수 있어 넘긴다.
+  chwp.onOpenUrl = (url) => {
+    self.postMessage({ openUrl: String(url) });
+  };
   // 2D 화면: 코어가 정한 그림 목록을 캔버스 2D 로 옮긴다. 캔버스가 이 워커에 있으면 여기서 그리고,
   // 원격 화면이면 메인 스레드로 넘긴다.
   const drawScreen2D = createScreen2D();
@@ -413,8 +417,10 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result: json });
       return;
     }
-    if (msg.op === "open" || msg.op === "new") {
-      const info = msg.op === "new" ? chwp.newDocument() : chwp.openDocument(msg.bytes);
+    if (msg.op === "open" || msg.op === "new" || msg.op === "unlock") {
+      const info = msg.op === "new" ? chwp.newDocument()
+        : msg.op === "unlock" ? chwp.unlockDocument(String(msg.password ?? ""))
+        : chwp.openDocument(msg.bytes);
       msg.bytes = null;
       const faces = [];
       const list = info?.faces;
@@ -431,6 +437,10 @@ self.onmessage = async (event) => {
           faces,
           docState: String(info?.docState || ""),
           name: String(info?.name || ""),
+          needPassword: !!info?.needPassword,
+          wrongPassword: !!info?.wrongPassword,
+          notice: String(info?.notice || ""),
+          locked: !!info?.locked,
           cursorStyle: readCursorStyle(chwp.cursorStyle()),
         },
       });
@@ -576,6 +586,7 @@ self.onmessage = async (event) => {
           needsFontSwap: !!camera.needsFontSwap,
           pinTap: !!camera.pinTap,
           dialog: typeof camera.dialog === "string" ? camera.dialog : "",
+          notice: typeof camera.notice === "string" ? camera.notice : "",
           active: !!camera.active,
           caret: !!camera.caret,
           cursorStyle: camera.select ? readCursorStyle(camera.cursorStyle) : null,
@@ -743,6 +754,35 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
+    if (msg.op === "exportPdf") {
+      // 문서가 인쇄를 막았으면 코어가 까닭을 준다.
+      const blocked = chwp.printBlockedReason();
+      if (blocked) {
+        self.postMessage({ id: msg.id, ok: false, error: blocked });
+        return;
+      }
+      await fontsReady;
+      const bytes = chwp.exportPdf(Number(msg.dpi) || 200);
+      const buffer = bytes && bytes.length ? bytes.buffer : null;
+      self.postMessage({ id: msg.id, ok: true, result: buffer }, buffer ? [buffer] : []);
+      return;
+    }
+    if (msg.op === "editEquation") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editEquation(String(msg.script ?? ""), Number(msg.baseUnit) || 0));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "equationView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.equationView() });
+      return;
+    }
+    if (msg.op === "equationPreview") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.equationPreview(String(msg.script ?? ""), Number(msg.baseUnit) || 1000) });
+      return;
+    }
     if (msg.op === "editNoteShape") {
       await fontsReady;
       const { result, transfers } = unpackEditResult(chwp.editNoteShape(msg.fields || {}, !!msg.endnote, !!msg.whole));
@@ -813,9 +853,53 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
+    if (msg.op === "clickHereView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.clickHereView() });
+      return;
+    }
+    if (msg.op === "editClickHere") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editClickHere(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
     if (msg.op === "bookmarkView") {
       await fontsReady;
       self.postMessage({ id: msg.id, ok: true, result: chwp.bookmarkView() });
+      return;
+    }
+    if (msg.op === "styleView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.styleView(Number(msg.styleId) | 0) });
+      return;
+    }
+    if (msg.op === "openStyleSource") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.openStyleSource(new Uint8Array(msg.bytes)) });
+      return;
+    }
+    if (msg.op === "exportStyles") {
+      await fontsReady;
+      const bytes = chwp.exportStyles();
+      if (!bytes) {
+        self.postMessage({ id: msg.id, ok: true, result: null });
+        return;
+      }
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      self.postMessage({ id: msg.id, ok: true, result: buffer }, [buffer]);
+      return;
+    }
+    if (msg.op === "tocCommand") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.tocCommand(String(msg.action), msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "styleCommand") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.styleCommand(String(msg.action), msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "editTableProperties") {

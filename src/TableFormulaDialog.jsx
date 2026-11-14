@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Frame, focusEditor, useOpen } from "./TableTextDialog.jsx";
 import { tableEdit, tableFormulaView, toast } from "./ui-actions.js";
 
-// 계산식(한글 2024): 계산식 입력, 함수, 쉬운 범위, 형식(기본·정수형·소수점 이하 한~네 자리), 세 자리마다 쉼표.
+// 계산식(한글 2024 TableFormulaDlg): 계산식 입력, 함수, 쉬운 범위, 형식(기본·정수형·소수점 이하 한~네 자리), 세 자리마다 쉼표.
 // 캐럿이 계산식 결과 안이면 그 식을 불러와 고친다. 계산·넣기·고치기는 코어(tableEdit formula, custom)가 한다.
 
 export function openTableFormulaDialog() {

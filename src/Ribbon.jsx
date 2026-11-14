@@ -10,6 +10,7 @@ import { openTableDialog } from "./TableDialog.jsx";
 import { openPageDialog } from "./PageDialogs.jsx";
 import { openSymbolDialog } from "./SymbolDialog.jsx";
 import { openHyperlinkDialog } from "./HyperlinkDialog.jsx";
+import { openEquationDialog } from "./EquationDialog.jsx";
 import { openColumnDialog } from "./ColumnDialog.jsx";
 import { openGridDialog, openMoveGuideDialog } from "./GuideDialogs.jsx";
 import { openSectionDialog } from "./SectionDialog.jsx";
@@ -28,6 +29,7 @@ import { openLineNumberDialog } from "./LineNumberDialog.jsx";
 import { deleteCurrentPage, openDeletePageDialog } from "./DeletePageDialog.jsx";
 import { deleteMemo, openMemoDialog } from "./MemoDialog.jsx";
 import { openBlockCalcDialog } from "./BlockCalcDialog.jsx";
+import { openTocDialog, updateToc } from "./TocDialog.jsx";
 import { openProofMarkDialog } from "./ProofMarkDialog.jsx";
 import { openNoteShapeDialog } from "./NoteShapeDialog.jsx";
 import { openFindDialog } from "./FindDialog.jsx";
@@ -42,7 +44,7 @@ import {
 // 시안(한컴 스타일 A)의 리본. 탭마다 묶음을 한 줄로 두고 세로선으로 나눈다.
 // 아직 없는 기능도 시안대로 두고, 누르면 준비 중이라고 알린다. 시안에서 흐린 단추만 disabled 다.
 
-export const ribbonTabs = ["편집", "보기", "입력", "서식", "쪽", "보안", "도구"];
+export const ribbonTabs = ["편집", "보기", "입력", "서식", "쪽", "보안", "검토", "도구"];
 
 // 머리말·꼬리말을 고치는 동안만 편집 탭 왼쪽에 생기는 탭.
 export const bandTab = "머리말/꼬리말";
@@ -224,13 +226,14 @@ function GalleryScroll({ onUse, runs = {}, allItems = null }) {
   );
 }
 
-const shapes = ["글상자", "직사각형", "타원", "직선", "화살표", "곡선", "다각형", "삼각형", "그리기"];
-// 그릴 수 있는 도형. 누르면 다음 끌기 한 번으로 그 도형을 그린다.
-const shapeTools = { 직사각형: 1, 타원: 2, 직선: 3, 글상자: 4, "세로 글상자": 5 };
+// 한글 2024 도형 갤러리 차례: 가로 글상자, 세로 글상자, 직사각형, 타원, 직선, 호, 다각형, 곡선, 자유선.
+const shapes = ["글상자", "세로 글상자", "직사각형", "타원", "직선", "호", "다각형", "곡선", "자유선"];
+// 그릴 도형 번호(코어 setDrawTool). 상자 도형·호는 한 번 끌기, 다각형·곡선은 점을 누르고 두 번 눌러 끝내기, 자유선은 끈 자취.
+const shapeTools = { 직사각형: 1, 타원: 2, 직선: 3, 글상자: 4, "세로 글상자": 5, 호: 6, 다각형: 7, 곡선: 8, 자유선: 9 };
 const drawRun = (label) => (shapeTools[label] ? { run: () => drawShape(shapeTools[label]) } : {});
 const shapeMenu = {
   menu: true,
-  menuItems: ["직사각형", "타원", "직선", "글상자", "세로 글상자"].map((label) => ({ label, ...drawRun(label) })),
+  menuItems: ["직사각형", "타원", "직선", "호", "다각형", "곡선", "자유선", "글상자", "세로 글상자"].map((label) => ({ label, ...drawRun(label) })),
 };
 
 function ShapeGallery({ onUse }) {
@@ -285,7 +288,7 @@ function StyleGallery({ onUse }) {
           </button>
         ))}
       </div>
-      <GalleryScroll onUse={onUse} runs={runs} allItems={styleItems(names)} />
+      <GalleryScroll onUse={onUse} runs={runs} allItems={styleItems(names).slice(1)} />
     </div>
   );
 }
@@ -562,7 +565,11 @@ const outlineMenu = {
     { label: "한 수준 위로", run: () => applyStyle({ headingLevelStep: -1 }) },
   ],
 };
-const styleItems = (names) => names.map((name) => ({ label: name, run: () => applyStyle({ styleName: name }) }));
+// 스타일 단추 메뉴: 스타일 대화 상자(F6)와 문서 스타일들.
+const styleItems = (names) => [
+  { label: "스타일...", run: () => openFormatDialog("style") },
+  ...names.map((name) => ({ label: name, run: () => applyStyle({ styleName: name }) })),
+];
 
 // 문단 번호·글머리표. 커서 문단의 머리 종류면 눌린 모양이다.
 function HeadingStack({ onUse }) {
@@ -661,6 +668,18 @@ const memoMenu = {
 };
 
 // 블록 계산(한글 도구 탭 블록 계산 펼침: 블록 합계·블록 평균). 수를 읽는 규칙과 넣을 자리는 코어가 정한다.
+// 제목 차례(한글 도구 탭 제목 차례 펼침): 차례 만들기, 차례 새로 고침(캐럿 차례 Ctrl+K,U·모든 차례 Ctrl+K,A).
+const tocMenu = {
+  menu: true,
+  icon: "개요",
+  run: () => openTocDialog(),
+  menuItems: [
+    { label: "차례 만들기...", run: () => openTocDialog() },
+    { label: "차례 새로 고침", run: () => updateToc(false) },
+    { label: "모든 차례 새로 고침", run: () => updateToc(true) },
+  ],
+};
+
 const blockCalcMenu = {
   menu: true,
   icon: "계산식",
@@ -671,7 +690,7 @@ const blockCalcMenu = {
   ],
 };
 
-// 줄 번호(한글 쪽 탭 줄 번호 펼침).
+// 줄 번호(한글 쪽 탭 줄 번호 펼침: ShowLineNumbers·SuppressLineNumbers·SetLineNumbersDlg).
 const lineNumberMenu = {
   menu: true,
   menuItems: [
@@ -1051,8 +1070,9 @@ const ribbons = {
     big("표", { run: openTableDialog, menu: true, menuItems: [{ label: "표 만들기...", run: openTableDialog }, { type: "separator" }, { label: "문자열을 표로...", run: openTextToTableDialog }, { label: "표를 문자열로...", run: openTableToTextDialog }] }),
     big("캡션", { icon: "글상자", ...captionMenu }),
     big("차트", { menu: true }),
-    big("글맵시", { menu: true }),
-    big("수식", { menu: true }),
+    big("수식", { run: openEquationDialog }),
+    // 한글 InsertFieldCtrl: 한글 기본 안내문으로 누름틀을 바로 넣는다. 고치기는 캐럿이 든 누름틀(Ctrl+N,K 와 같다).
+    big("누름틀", { run: () => runShortcut("insertClickHere"), menu: true, menuItems: [{ label: "누름틀 넣기", run: () => runShortcut("insertClickHere") }, { label: "누름틀 고치기...", run: () => runShortcut("clickHereEdit") }] }),
     sep,
     big("각주", { run: () => insertNote(false) }),
     big("미주", { run: () => insertNote(true) }),
@@ -1060,6 +1080,8 @@ const ribbons = {
     sep,
     big("문자표", { run: openSymbolDialog }),
     big("하이퍼링크", { run: openHyperlinkDialog }),
+    // 한글 HyperlinkPrev·HyperlinkNext: 따라간 링크 이력의 앞·뒤(Ctrl+Q,B / Ctrl+Q,R).
+    { type: "stack", items: [{ label: "이전", run: () => runShortcut("linkBack") }, { label: "다음", run: () => runShortcut("linkForward") }] },
     big("책갈피", { run: openBookmarkDialog }),
     sep,
     big("덧말 넣기", { run: openRubyDialog }),
@@ -1129,7 +1151,19 @@ const ribbons = {
     sep,
     big("문서 보안 설정"),
   ],
+  // 한글 검토 탭: 변경 내용 추적(기록 켜기·끄기), 적용·적용 안 함(캐럿 자리·모두), 이전·다음 바뀜. 규칙은 코어가 정한다.
+  검토: [
+    big("변경 내용 추적", { run: () => runShortcut("trackChanges") }),
+    sep,
+    // 큰 단추는 한글처럼 "적용(취소) 후 다음으로 이동"이다.
+    big("적용", { run: () => runShortcut("acceptAndMove"), menu: true, menuItems: [{ label: "적용 후 다음으로 이동", run: () => runShortcut("acceptAndMove") }, { label: "변경 내용 적용", run: () => runShortcut("acceptChange") }, { label: "표시된 변경 내용 모두 적용", run: () => runShortcut("acceptAllChanges") }, { label: "문서에서 변경 내용 모두 적용", run: () => runShortcut("acceptAllChanges") }] }),
+    big("적용 안 함", { run: () => runShortcut("rejectAndMove"), menu: true, menuItems: [{ label: "취소 후 다음으로 이동", run: () => runShortcut("rejectAndMove") }, { label: "변경 내용 취소", run: () => runShortcut("rejectChange") }, { label: "표시된 변경 내용 모두 취소", run: () => runShortcut("rejectAllChanges") }, { label: "문서에서 변경 내용 모두 취소", run: () => runShortcut("rejectAllChanges") }] }),
+    { type: "stack", items: [{ label: "이전", run: () => runShortcut("prevChange") }, { label: "다음", run: () => runShortcut("nextChange") }] },
+    sep,
+    big("메모", memoMenu),
+  ],
   도구: [
+    big("제목 차례", tocMenu),
     big("블록 계산", blockCalcMenu),
     big("교정 부호", { icon: "메모", run: () => openProofMarkDialog() }),
   ],
@@ -1458,9 +1492,9 @@ const mobilePages = {
   ],
   입력: [
     ["도형", [tile("글상자", drawRun("글상자")), tile("직사각형", drawRun("직사각형")), tile("타원", drawRun("타원")), tile("직선", drawRun("직선")), tile("화살표"), tile("더 보기", { glyph: "more" })]],
-    ["개체", [tile("그림", { run: pickPicture }), tile("표", { run: openTableDialog }), tile("차트", { menu: true }), tile("글맵시", { menu: true }), tile("수식", { menu: true })]],
+    ["개체", [tile("그림", { run: pickPicture }), tile("표", { run: openTableDialog }), tile("차트", { menu: true }), tile("수식", { run: openEquationDialog })]],
     ["주석", [tile("각주", { run: () => insertNote(false) }), tile("미주", { run: () => insertNote(true) }), tile("메모", memoMenu)]],
-    ["링크", [tile("문자표", { run: openSymbolDialog }), tile("하이퍼링크", { run: openHyperlinkDialog }), tile("책갈피", { run: openBookmarkDialog })]],
+    ["링크", [tile("문자표", { run: openSymbolDialog }), tile("하이퍼링크", { run: openHyperlinkDialog }), tile("누름틀", { run: () => runShortcut("insertClickHere") }), tile("이전", { run: () => runShortcut("linkBack") }), tile("다음", { run: () => runShortcut("linkForward") }), tile("책갈피", { run: openBookmarkDialog })]],
     ["글자", [tile("덧말 넣기", { run: openRubyDialog }), tile("글자 겹치기", { run: openComposeDialog })]],
   ],
   서식: [
@@ -1486,7 +1520,12 @@ const mobilePages = {
     ["개인 정보", [tile("선택 글자 보호", { disabled: true }), tile("개인 정보 찾아서 보호"), tile("개인 정보 보호 해제", { disabled: true }), tile("개인 정보 보호 암호 변경", { disabled: true })]],
     ["보안 설정", [tile("문서 보안 설정")]],
   ],
+  검토: [
+    ["변경 내용", [tile("변경 내용 추적", { run: () => runShortcut("trackChanges") }), tile("이전", { run: () => runShortcut("prevChange") }), tile("다음", { run: () => runShortcut("nextChange") })]],
+    ["적용", [tile("적용", { run: () => runShortcut("acceptAndMove") }), tile("적용 안 함", { run: () => runShortcut("rejectAndMove") }), tile("모두 적용", { icon: "적용", run: () => runShortcut("acceptAllChanges") }), tile("모두 적용 안 함", { icon: "적용 안 함", run: () => runShortcut("rejectAllChanges") })]],
+  ],
   도구: [
+    ["차례", [tile("차례 만들기", { icon: "개요", run: openTocDialog }), tile("차례 새로 고침", { icon: "개요", run: () => updateToc(true) })]],
     ["계산", [tile("블록 합계", { icon: "계산식", run: () => openBlockCalcDialog("sum") }), tile("블록 평균", { icon: "계산식", run: () => openBlockCalcDialog("average") })]],
     ["교정", [tile("교정 부호", { icon: "메모", run: () => openProofMarkDialog() })]],
   ],

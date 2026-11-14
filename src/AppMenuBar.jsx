@@ -8,6 +8,7 @@ import {
   Copy,
   Expand,
   FileCog,
+  FileDown,
   FilePlus,
   Info,
   FileText,
@@ -21,6 +22,7 @@ import {
   Palette,
   Pilcrow,
   Plus,
+  Printer,
   Redo2,
   Ruler,
   Save,
@@ -39,6 +41,7 @@ import { useZoomState, ZoomDialog } from "./ZoomDialog.jsx";
 import { openBlockCalcDialog } from "./BlockCalcDialog.jsx";
 import { openProofMarkDialog } from "./ProofMarkDialog.jsx";
 import { bandTab, masterTab, noteTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
+import { openTocDialog, updateToc } from "./TocDialog.jsx";
 import { FormatDialogs, openFormatDialog } from "./FormatDialogs.jsx";
 import { openTableDialog } from "./TableDialog.jsx";
 import { openFindDialog } from "./FindDialog.jsx";
@@ -62,6 +65,8 @@ import { openDeletePageDialog } from "./DeletePageDialog.jsx";
 import { openTablePropertiesDialog } from "./TablePropertiesDialog.jsx";
 import { openColumnDialog } from "./ColumnDialog.jsx";
 import { openGridDialog, openMoveGuideDialog } from "./GuideDialogs.jsx";
+import { openEquationDialog } from "./EquationDialog.jsx";
+import { printDocument, savePdf } from "./ui-actions.js";
 import { applyViewGuides, drawShape, insertBreak, newDocument, toggleFullScreen, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useInTable, useMaster, useNote, useOverwrite, useRulersShown, useViewGuides, useWide } from "./ui-actions.js";
 import {
   Menubar,
@@ -89,6 +94,9 @@ const menus = [
       { type: "separator" },
       { label: "저장", Icon: Save, command: "save", onSelect: saveAs },
       { label: "다른 이름으로 저장", Icon: SaveAll, onSelect: saveAs },
+      { label: "PDF로 저장", Icon: FileDown, onSelect: savePdf },
+      { type: "separator" },
+      { label: "인쇄...", Icon: Printer, command: "print", onSelect: printDocument },
       { type: "separator" },
       { label: "ClassingHWP 정보", Icon: Info, onSelect: openAbout },
       { label: "문서 닫기", Icon: X },
@@ -140,8 +148,11 @@ const menus = [
       { label: "표/셀 속성...", Icon: Table, onSelect: openTablePropertiesDialog },
       { label: "그림...", Icon: Image, onSelect: pickPicture },
       { label: "글상자", Icon: Type, onSelect: () => drawShape(4) },
+      { label: "수식...", Icon: Omega, command: "equationDialog", onSelect: openEquationDialog },
       { label: "문자표...", Icon: Omega, onSelect: openSymbolDialog },
       { label: "책갈피...", Icon: Type, command: "bookmarkDialog", onSelect: openBookmarkDialog },
+      { label: "하이퍼링크 이전", Icon: Type, command: "linkBack", onSelect: () => runShortcut("linkBack") },
+      { label: "하이퍼링크 다음", Icon: Type, command: "linkForward", onSelect: () => runShortcut("linkForward") },
       { label: "덧말 넣기...", Icon: Type, onSelect: openRubyDialog },
       { label: "글자 겹치기...", Icon: Type, onSelect: openComposeDialog },
       { label: "각주/미주 모양...", Icon: Type, onSelect: () => openNoteShapeDialog(false) },
@@ -152,7 +163,8 @@ const menus = [
     items: [
       { label: "글자 모양...", Icon: ALargeSmall, command: "charDialog", onSelect: () => openFormatDialog("char") },
       { label: "문단 모양...", Icon: Pilcrow, command: "paraDialog", onSelect: () => openFormatDialog("para") },
-      { label: "스타일", Icon: Palette, type: "styles" },
+      { label: "스타일...", Icon: Palette, command: "styleDialog", onSelect: () => openFormatDialog("style") },
+      { label: "스타일 목록", Icon: Palette, type: "styles" },
     ],
   },
   {
@@ -176,6 +188,10 @@ const menus = [
   {
     label: "도구",
     items: [
+      { label: "차례 만들기...", Icon: FileText, onSelect: () => openTocDialog() },
+      { label: "차례 새로 고침", Icon: FileText, command: "updateToc", onSelect: () => updateToc(false) },
+      { label: "모든 차례 새로 고침", Icon: FileText, command: "updateAllToc", onSelect: () => updateToc(true) },
+      { type: "separator" },
       { label: "블록 합계...", Icon: Hash, onSelect: () => openBlockCalcDialog("sum") },
       { label: "블록 평균...", Icon: Hash, onSelect: () => openBlockCalcDialog("average") },
       { type: "separator" },

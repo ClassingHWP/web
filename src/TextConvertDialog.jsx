@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { convertText } from "./ui-actions.js";
 
 // 글자 바꾸기 → 대문자/소문자 바꾸기·전각/반각 바꾸기(한글 2024 편집 → 글자 바꾸기 ▾).
-// 항목 이름은 한글 대화 상자 글이다.
+// 항목 이름은 한글 화면 글이다. 이 두 대화 상자는 한글 대화 상자 정의가 없어
 // 단축 글자는 두지 않았다. 바꾸는 규칙·블록·되돌리기는 코어(editConvertText)가 한다. 고른 값은 다음에 열 때 남는다.
 
 export function openCaseDialog() {

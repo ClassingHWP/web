@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Frame, focusEditor, useOpen } from "./TableTextDialog.jsx";
 import { sortParagraphs, sortView, tableEdit, toast } from "./ui-actions.js";
 
-// 정렬(한글 2024). 편집 탭·편집 메뉴·표 탭이 같은 대화 상자를 연다. 칸 블록이면 표 정렬, 글 블록이면 본문 정렬이고,
-// 무엇인지와 필드 수는 코어(sortView)가 정한다. 정렬 기준 셋(위치·형식: 한글 대화 상자 차례), 필드 구분(탭·쉼표·빈칸·기호,
+// 정렬(한글 2024 SortTextDlg). 편집 탭·편집 메뉴·표 탭이 같은 대화 상자를 연다. 칸 블록이면 표 정렬, 글 블록이면 본문 정렬이고,
+// 무엇인지와 필드 수는 코어(sortView)가 정한다. 정렬 기준 셋(위치·형식: 한글 IDS_SORT_METHOD1~8 차례), 필드 구분(탭·쉼표·빈칸·기호,
 // 연속된 구분 기호 무시), 정렬 설정(고어 정렬·뒤부터 앞으로 비교·종성/중성/초성 순으로 비교·각 문단별 단어 정렬·두 자리 연도 기준)은
 // 한글 대화 상자 차례다. 비교와 차례 정하기는 코어(sortTableRows·paragraphSortOrder·sortParagraphWords)가 한글과 같게 한다.
 
@@ -91,7 +91,7 @@ export function TableSortDialog() {
       void tableEdit("sort", fields).then((result) => { if (result?.documentChanged) close(); });
       return;
     }
-    // 단어 정렬은 한글처럼 개체가 빠질 수 있다고 한 번 묻는다.
+    // 단어 정렬은 한글처럼 개체가 빠질 수 있다고 한 번 묻는다(IDS_SORT_WORD_MESSAGE).
     if (keys[0].column === WORD && !confirmWord) {
       setConfirmWord(true);
       return;

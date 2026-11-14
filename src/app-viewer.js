@@ -51,6 +51,43 @@ async function saveAsDownload() {
   }
 }
 
+// PDF 로 저장(내려받기)·인쇄(브라우저 인쇄 창). PDF 는 코어가 만든다.
+async function pdfDownload() {
+  try {
+    const pdf = await viewer.exportPdf();
+    downloadBytes(pdf.bytes, pdf.name);
+    notify("PDF 로 저장했어요.", "saved");
+  } catch (error) {
+    notify(`PDF 로 저장하지 못했어요. ${error?.message || ""}`.trim(), "error", { label: "다시 시도", run: () => void pdfDownload() });
+  }
+}
+
+async function printPdf() {
+  try {
+    notify("인쇄할 쪽을 만드는 중이에요.", "info");
+    const pdf = await viewer.exportPdf();
+    const url = URL.createObjectURL(new Blob([pdf.bytes], { type: "application/pdf" }));
+    const frame = document.createElement("iframe");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    frame.src = url;
+    frame.addEventListener("load", () => {
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch {
+        window.open(url, "_blank");
+      }
+      setTimeout(() => {
+        frame.remove();
+        URL.revokeObjectURL(url);
+      }, 60000);
+    });
+    document.body.append(frame);
+  } catch (error) {
+    notify(`인쇄하지 못했어요. ${error?.message || ""}`.trim(), "error", { label: "다시 시도", run: () => void printPdf() });
+  }
+}
+
 // ?handler= OneDrive 파일 핸들러. ?file= 브라우저가 직접 받을 수 있는 https 주소(같은 출처면 경로만 줘도 된다).
 function openFromQuery(params) {
   const handler = params.get("handler") || (typeof window.__HWP_HANDLER__ === "string" ? window.__HWP_HANDLER__ : "");
@@ -133,6 +170,7 @@ export function startAppViewer(host) {
     windowEvent("chwp-viewport-changed", viewer.info.viewport);
   }
   viewer.addEventListener("saverequest", () => void saveAsDownload());
+  viewer.addEventListener("printrequest", () => void printPdf());
   viewer.addEventListener("openrequest", () => document.getElementById("file")?.click());
 
   // 창 사건·window.__chwp* → 보기 메서드.
@@ -154,6 +192,8 @@ export function startAppViewer(host) {
   window.__chwpSectionSettings = viewer.sectionSettings;
   window.__chwpTableProperties = viewer.tableProperties;
   window.__chwpBookmark = viewer.bookmark;
+  window.__chwpClickHere = viewer.clickHere;
+  window.__chwpClickHereView = viewer.clickHereView;
   window.__chwpCaption = viewer.caption;
   window.__chwpGoToPage = viewer.goToPage;
   window.__chwpGoToSection = viewer.goToSection;
@@ -165,6 +205,16 @@ export function startAppViewer(host) {
   window.__chwpDeleteMarks = viewer.deleteMarks;
   window.__chwpShortcut = viewer.shortcut;
   window.__chwpBookmarkView = viewer.bookmarkView;
+  window.__chwpStyleView = viewer.styleView;
+  window.__chwpTocCommand = viewer.tocCommand;
+  window.__chwpOpenStyleSource = viewer.openStyleSource;
+  // 스타일 내보내기: 코어가 만든 스타일만 담은 HWPX 를 내려받는다.
+  window.__chwpExportStyles = () => viewer.exportStyles().then((buffer) => {
+    if (!buffer) return false;
+    downloadBytes(new Uint8Array(buffer), "스타일.hwpx");
+    return true;
+  });
+  window.__chwpStyleCommand = viewer.styleCommand;
   window.__chwpTablePropertiesView = viewer.tablePropertiesView;
   window.__chwpGlyphGroup = viewer.glyphGroup;
   window.__chwpGlyphGroupView = viewer.glyphGroupView;
@@ -179,6 +229,9 @@ export function startAppViewer(host) {
   window.__chwpViewGuidesView = viewer.viewGuides;
   window.__chwpApplyViewGuides = viewer.applyViewGuides;
   window.__chwpInsertHyperlink = viewer.insertHyperlink;
+  window.__chwpEditEquation = viewer.editEquation;
+  window.__chwpEquationView = viewer.equationView;
+  window.__chwpEquationPreview = viewer.equationPreview;
   window.__chwpInsertSymbol = viewer.insertSymbol;
   window.__chwpPageControlFields = viewer.pageControlFields;
   window.__chwpFindReplace = viewer.findReplace;
@@ -199,6 +252,8 @@ export function startAppViewer(host) {
   window.addEventListener("chwp-rulers", () => void viewer.toggleRulers());
   window.addEventListener("chwp-zoom-dialog", (event) => void viewer.zoomDialog(event.detail || {}));
   window.addEventListener("chwp-save-as", () => void saveAsDownload());
+  window.addEventListener("chwp-save-pdf", () => void pdfDownload());
+  window.addEventListener("chwp-print", () => void printPdf());
   window.addEventListener("chwp-new-document", () => void viewer.newDocument());
   // 배율 메뉴·상태 줄 배율. 사건 모양을 풀어 맞는 명령으로 보낸다.
   window.addEventListener("chwp-zoom", (event) => {

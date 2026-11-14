@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Frame, focusEditor, useOpen } from "./TableTextDialog.jsx";
 import { sectionSettingsView, setSectionSettings } from "./ui-actions.js";
 
-// 줄 번호 설정(한글 2024): 시작 번호, 본문과의 간격, 번호 간격, 시작 번호 방식.
+// 줄 번호 설정(한글 2024 SetLineNumbersDlg): 시작 번호, 본문과의 간격, 번호 간격, 시작 번호 방식.
 // 값은 캐럿 구역의 구역 설정이다(코어 sectionSettings 의 lineNumber*). 설정하면 줄 번호를 보인다.
 
 export function openLineNumberDialog() {

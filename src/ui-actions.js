@@ -43,6 +43,14 @@ export function saveAs() {
   window.dispatchEvent(new Event("chwp-save-as"));
 }
 
+// PDF 로 저장·인쇄. PDF 는 코어가 만들고, 내려받기·인쇄 창은 셸이 연다.
+export function savePdf() {
+  window.dispatchEvent(new Event("chwp-save-pdf"));
+}
+export function printDocument() {
+  window.dispatchEvent(new Event("chwp-print"));
+}
+
 // 눈금자 켜고 끄기. 켠 값은 코어가 들고 있고 바뀌면 chwp-rulers-changed 로 알린다.
 export function toggleRulers() {
   window.dispatchEvent(new Event("chwp-rulers"));
@@ -436,6 +444,22 @@ export function setColumns(fields) {
 export function columnView(fields) {
   if (typeof window.__chwpColumnView !== "function") return Promise.resolve(null);
   return Promise.resolve(window.__chwpColumnView(fields));
+}
+
+// 수식 편집기 값(editing·script·baseUnit)·미리 보기(svg·ready)·넣기/고치기. 정하는 일은 코어가 한다.
+export function equationView() {
+  if (typeof window.__chwpEquationView !== "function") return Promise.resolve(null);
+  return Promise.resolve(window.__chwpEquationView());
+}
+export function equationPreview(script, baseUnit) {
+  if (typeof window.__chwpEquationPreview !== "function") return Promise.resolve(null);
+  return Promise.resolve(window.__chwpEquationPreview(script, baseUnit));
+}
+export function editEquation(script, baseUnit) {
+  if (typeof window.__chwpEditEquation !== "function") return;
+  void Promise.resolve(window.__chwpEditEquation(script, baseUnit)).then((result) => {
+    if (result && !result.documentChanged && result.error) toast(result.error, "info", null, { key: "equation" });
+  });
 }
 
 // 하이퍼링크 넣기. 넣지 못하면 코어가 준 까닭을 알린다.

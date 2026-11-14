@@ -425,6 +425,19 @@ export function attachEditor(ctx) {
       if (blocked()) return Promise.resolve(null);
       return queueEdit(() => session.editInsertHyperlink(text, url));
     },
+    // 수식 넣기·고치기(고른 수식이면 고친다).
+    editEquation(script, baseUnit) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editEquation(script, baseUnit));
+    },
+    async equationView() {
+      await coreReady;
+      return session.equationView();
+    },
+    async equationPreview(script, baseUnit) {
+      await coreReady;
+      return session.equationPreview(script, baseUnit);
+    },
     // 주석 모양.
     noteShape(fields, endnote, whole) {
       if (blocked()) return Promise.resolve(null);
@@ -475,6 +488,35 @@ export function attachEditor(ctx) {
     async bookmarkView() {
       await coreReady;
       return session.bookmarkView();
+    },
+    async clickHereView() {
+      await coreReady;
+      return session.clickHereView();
+    },
+    clickHere(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editClickHere(fields));
+    },
+    // 스타일 대화 상자.
+    async styleView(styleId) {
+      await coreReady;
+      return session.styleView(styleId);
+    },
+    async openStyleSource(bytes) {
+      await coreReady;
+      return session.openStyleSource(bytes);
+    },
+    async exportStyles() {
+      await coreReady;
+      return session.exportStyles();
+    },
+    tocCommand(action, fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.tocCommand(action, fields));
+    },
+    styleCommand(action, fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.styleCommand(action, fields));
     },
     // 표/셀 속성.
     tableProperties(fields) {

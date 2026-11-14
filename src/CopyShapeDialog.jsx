@@ -3,7 +3,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
 import { copyShape } from "./ui-actions.js";
 
-// 모양 복사(한글 2024 편집 → 모양 복사, Alt+C).
+// 모양 복사(한글 2024 편집 → 모양 복사).
 // 본문 모양 복사: 글자 모양(L)·문단 모양(T)·글자 모양과 문단 모양 둘 다 복사(B)·글자 스타일(F)·문단 스타일(P),
 // 셀 모양 복사: 셀 속성(C)·셀 테두리(O)·셀 배경(G), 표에서 적용 대상: 본문 모양과 셀 모양 둘 다(H)·셀 모양만(E), 복사(D).
 // 블록을 잡고 Alt+C 를 다시 누르면 코어가 기억한 모양을 입힌다(editShortcut copyShape). 글자 스타일과 셀 모양은

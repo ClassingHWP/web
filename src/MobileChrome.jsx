@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { FilePlus, FolderOpen, Info, Menu, Save, SaveAll, X } from "lucide-react";
+import { FileDown, FilePlus, FolderOpen, Info, Menu, Printer, Save, SaveAll, X } from "lucide-react";
 import { openAbout } from "./AboutDialog.jsx";
 import { FormatBar } from "./FormatBar.jsx";
 import { bandTab, masterTab, MobileRibbon, noteTab, ribbonTabs, tableTabs } from "./Ribbon.jsx";
-import { newDocument, notReady, openFile, saveAs, toggleRulers, useRulersShown } from "./ui-actions.js";
+import { newDocument, notReady, openFile, printDocument, saveAs, savePdf, toggleRulers, useRulersShown } from "./ui-actions.js";
 
 // 시안(MobileEdit·MobileMenu·MobileFormat)의 휴대폰 화면.
 // 위는 메뉴와 탭 칩 한 줄, 아래는 고른 탭의 리본 한 장 또는 키보드 위 서식 막대다.
@@ -119,6 +119,8 @@ const fileItems = [
   { label: "열기", Icon: FolderOpen, run: openFile },
   { label: "저장", Icon: Save },
   { label: "다른 이름으로 저장", Icon: SaveAll, run: saveAs },
+  { label: "PDF로 저장", Icon: FileDown, run: savePdf },
+  { label: "인쇄", Icon: Printer, run: printDocument },
   { label: "ClassingHWP 정보", Icon: Info, run: openAbout },
   { label: "문서 닫기", Icon: X, disabled: true },
 ];

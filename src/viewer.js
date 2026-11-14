@@ -20,11 +20,12 @@ import { attachEditor } from "./editor.js";
 //              주지 않으면 앱 빌드가 묶은 엔진(패키지는 /chwp/)을 쓴다.
 //   fonts      글꼴 서버 주소 또는 { base, index, licenseSwap, replace }. 목록 셋은 주소나 이미 읽은 JSON 값이다.
 //              기본은 우리 글꼴 서버(DEFAULT_FONTS)다. 우리 목록을 받아 고쳐 넘겨도 된다.
+//   askPassword  (wrong) => 암호 문자열(취소면 null)의 Promise. 암호 걸린 문서를 열 때 부른다. 없으면 기본 창을 띄운다.
 //   nogpu, measured, cacheBudget  개발용(GPU 끄기, 측정 줄 높이, "pageGpu:8000000" 캐시 예산)
 //
 // 알림(addEventListener, detail): status {text}, notice {text}, viewport, zoom, docstate {state, name}, cursorstyle, caretstatus,
 // fontlist, stylelist, colors, keybindings, zoomspec, rulers {on}, editbutton {shown}, toast {text, kind, action},
-// fontswapask {swaps}, selectionmenu {x, y, readOnly}, formatdialog {name}, saverequest, openrequest,
+// fontswapask {swaps}, selectionmenu {x, y, readOnly}, formatdialog {name}, saverequest, printrequest, openrequest,
 // opened (코어 입력 답, 쪽은 0부터), openfailed {error}.
 // 마지막 값은 viewer.info 에 남는다.
 
@@ -627,6 +628,7 @@ export function createViewer(host, options = {}) {
     if (result?.active || result?.caret) editor.focusInput();
     // 덧말·글자 겹치기를 두 번 누르면 코어가 고른 고치기 대화 상자를 연다.
     if (result?.dialog) emit("formatdialog", { name: result.dialog });
+    if (result?.notice) emit("notice", { text: result.notice });
     // 블록 마커를 끌지 않고 누르면 그 자리에 복사·잘라내기 메뉴를 띄운다.
     if (result?.pinTap && selectedText) {
       emit("selectionmenu", { x: lastPressClient.x, y: lastPressClient.y, readOnly });
@@ -879,10 +881,10 @@ export function createViewer(host, options = {}) {
     }
     // 붙여 넣기는 플랫폼이 입력칸에 붙여 넣기 사건으로 준다(입력칸 paste 사건). 기본 동작을 막지 않는다.
     if (command === "paste") return;
-    if (command === "cut" || command === "open" || command === "save") {
+    if (command === "cut" || command === "open" || command === "save" || command === "print") {
       event.preventDefault();
       if (command === "cut") selectionAction("cut");
-      else emit(command === "open" ? "openrequest" : "saverequest", {});
+      else emit(command === "open" ? "openrequest" : command === "print" ? "printrequest" : "saverequest", {});
       return;
     }
     if (command === "copy") {
@@ -1154,6 +1156,7 @@ export function createViewer(host, options = {}) {
       phase,
       id: event.pointerId,
       button: button | 0,
+      shift: !!event.shiftKey,
       x: point.x,
       y: point.y,
       t: event.timeStamp || performance.now(),
@@ -1344,6 +1347,50 @@ export function createViewer(host, options = {}) {
     sendWheel(event);
   }, { passive: false, capture: true });
 
+  // 문서 암호를 묻는다. options.askPassword(wrong) 가 있으면 그것을, 없으면 작은 기본 창을 쓴다. 취소하면 null 이다.
+  function askPassword(wrong) {
+    if (typeof options.askPassword === "function") return Promise.resolve(options.askPassword(!!wrong));
+    return new Promise((resolve) => {
+      const dialog = document.createElement("dialog");
+      dialog.className = "chwp-password";
+      dialog.style.cssText = "margin:auto;border:1px solid #8886;border-radius:10px;padding:18px 20px;width:320px;max-width:calc(100vw - 32px);box-sizing:border-box;font:14px/1.5 system-ui,sans-serif;color:CanvasText;background:Canvas;box-shadow:0 8px 30px #0003";
+      const form = document.createElement("form");
+      form.method = "dialog";
+      const label = document.createElement("label");
+      label.textContent = wrong ? "암호가 틀렸습니다. 다시 넣어 주세요." : "암호가 걸린 문서입니다. 문서 암호를 넣어 주세요.";
+      label.style.cssText = "display:block;margin-bottom:10px";
+      const input = document.createElement("input");
+      input.type = "password";
+      input.autocomplete = "off";
+      input.style.cssText = "display:block;width:100%;box-sizing:border-box;padding:6px 8px;margin-top:8px;font:inherit;color:FieldText;background:Field;border:1px solid #8888;border-radius:6px";
+      label.append(input);
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:14px";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "취소";
+      const buttonCss = "padding:5px 14px;font:inherit;border-radius:6px;border:1px solid #8888;cursor:pointer;";
+      cancel.style.cssText = buttonCss + "color:CanvasText;background:transparent";
+      const ok = document.createElement("button");
+      ok.type = "submit";
+      ok.textContent = "열기";
+      ok.style.cssText = buttonCss + "color:#fff;background:#2f6fde;border-color:#2f6fde";
+      row.append(cancel, ok);
+      form.append(label, row);
+      dialog.append(form);
+      let answer = null;
+      form.addEventListener("submit", () => { answer = input.value; });
+      cancel.addEventListener("click", () => dialog.close());
+      dialog.addEventListener("close", () => {
+        dialog.remove();
+        resolve(answer);
+      });
+      (host.ownerDocument || document).body.append(dialog);
+      dialog.showModal();
+      input.focus();
+    });
+  }
+
   async function openBytes(bytes, name, query = options.query) {
     let openError = null;
     try {
@@ -1362,7 +1409,17 @@ export function createViewer(host, options = {}) {
       scenePages = [];
       const openStarted = Date.now();
       openedName = "";
-      const result = bytes ? await session.open(bytes, true) : await session.newDocument();
+      let result = bytes ? await session.open(bytes, true) : await session.newDocument();
+      // 암호 걸린 문서는 코어가 바이트를 들고 기다린다. 암호를 물어 넘기고, 틀리면 다시 묻는다.
+      while (result && !result.ok && result.needPassword) {
+        setStatus("문서 암호를 기다리는 중...");
+        const password = await askPassword(result.wrongPassword);
+        if (password === null || password === undefined) {
+          result = { ok: false, error: "암호를 넣지 않아 문서를 열지 않았습니다." };
+          break;
+        }
+        result = await session.unlock(password);
+      }
       if (result?.ok) {
         // 새 문서 이름은 코어가 정한다. 연 문서는 파일 이름이다.
         openedName = name || result.name || "";
@@ -1398,6 +1455,8 @@ export function createViewer(host, options = {}) {
         const opened = await sendInput({ type: "embedOpen", choice: String(query || "") });
         setPages(pageCount, opened?.page | 0, true);
         emit("opened", opened);
+        // 배포용 문서처럼 코어가 연 뒤 알릴 말이 있으면 보인다.
+        if (result.notice) emit("notice", { text: result.notice });
         // 글꼴 고르기 목록에 이 문서 글꼴이 더해진다(막힌 글꼴은 코어가 뺀다).
         void session.pickableFonts().then((list) => emit("fontlist", Array.isArray(list) ? list : []))
           .catch((error) => logError("pickableFonts", error));
@@ -1494,6 +1553,22 @@ export function createViewer(host, options = {}) {
     return saving;
   }
 
+  // PDF 바이트와 이름({ bytes, name }). 쪽을 어떻게 그려 묶을지는 코어(exportPdf)가 정한다. 내려받기·인쇄는 셸 일이다.
+  function exportPdf(dpi = 200) {
+    if (!openedName) return Promise.reject(new Error("열린 문서가 없습니다."));
+    setStatus("PDF 만드는 중...");
+    return editor.afterEdits(() => session.exportPdf(dpi)).then((buffer) => {
+      if (!buffer || !buffer.byteLength) throw new Error("PDF 를 만들지 못했습니다.");
+      const base = String(openedName).replace(/\.[^./\\]*$/, "") || "문서";
+      setStatus(`${base}.pdf · ${pageCount}페이지`);
+      return { bytes: new Uint8Array(buffer), name: `${base}.pdf` };
+    }).catch((error) => {
+      logError("exportPdf", error);
+      setStatus(`PDF 만들기 실패: ${error?.message || error}`);
+      throw error;
+    });
+  }
+
   // 보기 전용·편집 전환. 보기 전용이면 코어를 읽기 전용으로 켜고, 글자 입력칸에 초점을 주지 않는다.
   function setReadOnly(on) {
     readOnly = !!on;
@@ -1542,6 +1617,7 @@ export function createViewer(host, options = {}) {
     open,
     newDocument,
     save,
+    exportPdf,
     setReadOnly,
     // 넣은 보기 명령. zoom("150" | "width" | "in"), page(3 | "next"), view("two" | "grid", cols, rows), showEditButton(true)
     embed,
@@ -1606,10 +1682,25 @@ export function createViewer(host, options = {}) {
     // 메뉴·리본이 단축키와 같은 코어 명령을 부른다. 코어가 열 대화 상자를 주면 연다.
     shortcut: (command) => editor.shortcut(command).then((result) => {
       if (result?.dialog) emit("formatdialog", { name: result.dialog });
+      if (result?.notice) emit("notice", { text: result.notice });
       if (result && !result.documentChanged && result.error) emit("notice", { text: result.error });
       return result;
     }),
     bookmarkView: editor.bookmarkView,
+    clickHereView: editor.clickHereView,
+    clickHere: editor.clickHere,
+    styleView: editor.styleView,
+    tocCommand: editor.tocCommand,
+    openStyleSource: editor.openStyleSource,
+    exportStyles: editor.exportStyles,
+    // 스타일 표가 바뀌면 리본·서식 막대 스타일 목록도 새로 받는다.
+    styleCommand: (action, fields) => editor.styleCommand(action, fields).then((result) => {
+      if (result?.documentChanged) {
+        void session.styleNames().then((names) => emit("stylelist", Array.isArray(names) ? names : []))
+          .catch((error) => logError("styleNames", error));
+      }
+      return result;
+    }),
     tablePropertiesView: editor.tablePropertiesView,
     glyphGroup: editor.glyphGroup,
     glyphGroupView: editor.glyphGroupView,
@@ -1622,6 +1713,9 @@ export function createViewer(host, options = {}) {
     sectionSettingsView: editor.sectionSettingsView,
     columnView: editor.columnView,
     insertHyperlink: editor.insertHyperlink,
+    editEquation: editor.editEquation,
+    equationView: editor.equationView,
+    equationPreview: editor.equationPreview,
     insertSymbol: editor.insertSymbol,
     pageControlFields: editor.pageControlFields,
     findReplace: editor.findReplace,

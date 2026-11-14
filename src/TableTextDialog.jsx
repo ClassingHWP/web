@@ -3,11 +3,11 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
 import { tableText } from "./ui-actions.js";
 
-// 표를 문자열로·문자열을 표로(한글 2024 표 ↔ 문자열 바꾸기).
+// 표를 문자열로·문자열을 표로(한글 2024 TableToTextDlg·TextToTableDlg).
 // 표를 문자열로: 분리 방법 지정 — 탭(T)·쉼표(C)·빈칸(B)·기타 문자열(U)+칸(F), 설정(D).
 // 문자열을 표로: 자동으로 넣기(A) / 분리 방법 지정(M) — 탭(T)·쉼표(C)·3칸 이상의 빈칸(B)·선 그리기 문자(L)·
 //   기타 문자(E)+칸(F)·문자열(U)+칸(G), 선택 사항: 구분자 유지(K), 설정(D).
-// 나누고 붙이는 규칙은 코어(editTableText)가 한다. 선 그리기 문자는 한글에서도 확인하지 못해 꺼 두었다.
+// 나누고 붙이는 규칙은 코어(editTableText)가 한다. 선 그리기 문자는 한글에서도 COM 으로 되지 않아 꺼 두었다.
 
 export function openTableToTextDialog() {
   window.dispatchEvent(new Event("chwp-open-table-to-text-dialog"));

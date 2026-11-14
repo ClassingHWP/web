@@ -1,3 +1,4 @@
+import { ClickHereDialog, openClickHereDialog } from "./ClickHereDialog.jsx";
 import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive, Select as SelectPrimitive } from "radix-ui";
 import {
@@ -20,6 +21,7 @@ import { openTableDialog, TableDialog } from "./TableDialog.jsx";
 import { PageControlDialog } from "./PageDialogs.jsx";
 import { SymbolDialog } from "./SymbolDialog.jsx";
 import { HyperlinkDialog, openHyperlinkDialog } from "./HyperlinkDialog.jsx";
+import { EquationDialog, openEquationDialog } from "./EquationDialog.jsx";
 import { ColumnDialog } from "./ColumnDialog.jsx";
 import { GridDialog, MoveGuideDialog } from "./GuideDialogs.jsx";
 import { SectionDialog, openSectionDialog } from "./SectionDialog.jsx";
@@ -42,6 +44,8 @@ import { BlockCalcDialog } from "./BlockCalcDialog.jsx";
 import { DeleteMarksDialog } from "./DeleteMarksDialog.jsx";
 import { NoteShapeDialog } from "./NoteShapeDialog.jsx";
 import { FindDialog, openFindDialog } from "./FindDialog.jsx";
+import { StyleDialog, openStyleDialog } from "./StyleDialog.jsx";
+import { TocDialog, openTocDialog } from "./TocDialog.jsx";
 
 // 시안(글자 모양·문단 모양·편집 용지 대화 상자). 칸 이름과 칸에 친 값을 그대로 코어에 넘기고,
 // 코어가 준 값과 칸 설명(단위·범위·고를 수 있는 값)을 그대로 보인다. 단위 바꾸기와 함께 바뀌는 값도 코어가 정한다.
@@ -53,7 +57,8 @@ export function openFormatDialog(name, lang = "") {
 }
 
 
-const dialogKinds = { char: 0, para: 1, page: 2, pageBorder: 4 };
+// styleChar·stylePara 는 스타일 대화 상자가 고치는 스타일(초안)의 글자·문단 모양이다.
+const dialogKinds = { char: 0, para: 1, page: 2, pageBorder: 4, styleChar: 5, stylePara: 6 };
 
 // 편집 용지 칸을 바로 적용한다(리본의 세로·가로·쪽 여백·글자 방향). whole 이면 모든 구역에 적용한다.
 export function applyPageSetup(patch, whole = false) {
@@ -529,10 +534,10 @@ const languages = [["대표", "대표"], ["한글", "한글"], ["영문", "영�
 // 언어별 값 이름에 붙는 코어 언어 이름. 대표는 붙이지 않아 모든 언어에 같은 값이 들어간다.
 const languageKeys = { 한글: "HANGUL", 영문: "LATIN", 한자: "HANJA", 일어: "JAPANESE", 외국어: "OTHER", 기호: "SYMBOL", 사용자: "USER" };
 
-function CharDialog({ open, fonts, onClose, startLang = "대표" }) {
+function CharDialog({ open, fonts, onClose, startLang = "대표", kind = dialogKinds.char }) {
   const [tab, setTab] = useState("기본");
   const [lang, setLang] = useState("대표");
-  const form = useCoreForm(dialogKinds.char, open);
+  const form = useCoreForm(kind, open);
   const v = form.values;
   // 고른 언어의 값 이름. 대표면 그대로다.
   const langKey = (name) => (languageKeys[lang] ? `${name}.${languageKeys[lang]}` : name);
@@ -547,7 +552,7 @@ function CharDialog({ open, fonts, onClose, startLang = "대표" }) {
     const patch = form.patch();
     onClose();
     if (Object.keys(patch).length && typeof window.__chwpApplyFormatDialog === "function") {
-      void window.__chwpApplyFormatDialog(dialogKinds.char, patch);
+      void window.__chwpApplyFormatDialog(kind, patch);
     }
   }
 
@@ -595,7 +600,7 @@ function CharDialog({ open, fonts, onClose, startLang = "대표" }) {
               </div>
             </div>
           </Section>
-          <CorePreview kind={dialogKinds.char} form={form} height="6.6em" />
+          <CorePreview kind={kind} form={form} height="6.6em" />
         </>
       ) : null}
       {tab === "확장" ? (
@@ -643,7 +648,7 @@ function CharDialog({ open, fonts, onClose, startLang = "대표" }) {
               </div>
             </div>
           </Section>
-          <CorePreview kind={dialogKinds.char} form={form} height="6.6em" />
+          <CorePreview kind={kind} form={form} height="6.6em" />
         </>
       ) : null}
       {tab === "테두리/배경" ? <BorderFillPanel prefix="char" form={form} /> : null}
@@ -745,9 +750,9 @@ function TabPanel({ form }) {
   );
 }
 
-function ParaDialog({ open, onClose }) {
+function ParaDialog({ open, onClose, kind: dialogKind = dialogKinds.para }) {
   const [tab, setTab] = useState("기본");
-  const form = useCoreForm(dialogKinds.para, open);
+  const form = useCoreForm(dialogKind, open);
   const v = form.values;
   useEffect(() => {
     if (open) setTab("기본");
@@ -758,7 +763,7 @@ function ParaDialog({ open, onClose }) {
     const patch = form.patch();
     onClose();
     if (Object.keys(patch).length && typeof window.__chwpApplyFormatDialog === "function") {
-      void window.__chwpApplyFormatDialog(dialogKinds.para, patch);
+      void window.__chwpApplyFormatDialog(dialogKind, patch);
     }
   }
 
@@ -827,7 +832,7 @@ function ParaDialog({ open, onClose }) {
               <Row label="최소 공백"><FieldNumber form={form} name="condenseMin" label="최소 공백" /></Row>
             </div>
           </Section>
-          <CorePreview kind={dialogKinds.para} form={form} height="10em" />
+          <CorePreview kind={dialogKind} form={form} height="10em" />
         </>
       ) : null}
       {tab === "확장" ? (
@@ -1152,6 +1157,10 @@ export function FormatDialogs() {
       const name = event.detail?.name;
       if (name === "char") setCharLang(event.detail?.lang || "대표");
       if (name === "char" || name === "para" || name === "page" || name === "pageBorder") show(name);
+      // 스타일 대화 상자(F6)와 그 스타일의 글자·문단 모양.
+      if (name === "style") openStyleDialog();
+      if (name === "toc") openTocDialog();
+      if (name === "styleChar" || name === "stylePara") show(name);
       // 단축키가 여는 다른 대화 상자(Ctrl+F·Ctrl+H 찾기, 칸 블록 S 셀 나누기).
       if (name === "find" || name === "replace") openFindDialog();
       if (name === "splitCell") openTableDialog("split");
@@ -1160,6 +1169,8 @@ export function FormatDialogs() {
       if (name === "ruby") openRubyDialog();
       if (name === "compose") openComposeDialog();
       if (name === "hyperlink") openHyperlinkDialog();
+      if (name === "clickHere") openClickHereDialog();
+      if (name === "equation") openEquationDialog();
       if (name === "table") openTableDialog();
       if (name === "picture") pickPicture();
       if (name === "section") openSectionDialog();
@@ -1184,12 +1195,18 @@ export function FormatDialogs() {
     <>
       <CharDialog open={open === "char"} fonts={fonts} onClose={close} startLang={charLang} />
       <ParaDialog open={open === "para"} onClose={close} />
+      <StyleDialog />
+      <TocDialog />
+      <CharDialog open={open === "styleChar"} fonts={fonts} onClose={() => setOpen("")} kind={dialogKinds.styleChar} />
+      <ParaDialog open={open === "stylePara"} onClose={() => setOpen("")} kind={dialogKinds.stylePara} />
       <PageDialog open={open === "page"} onClose={close} />
       <PageBorderDialog open={open === "pageBorder"} onClose={close} />
       <TableDialog />
       <PageControlDialog />
       <SymbolDialog />
       <HyperlinkDialog />
+      <ClickHereDialog />
+      <EquationDialog />
       <ColumnDialog />
       <GridDialog />
       <MoveGuideDialog />

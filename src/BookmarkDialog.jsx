@@ -134,7 +134,7 @@ export function BookmarkDialog() {
   );
 }
 
-// 찾아가기(한글 2024): 쪽(P)·구역(A)·줄(L)·스타일(S)·조판 부호(R)·책갈피(B), 가기(D).
+// 찾아가기(한글 2024 GotoDlg): 쪽(P)·구역(A)·줄(L)·스타일(S)·조판 부호(R)·책갈피(B), 가기(D).
 // 쪽·구역·줄은 번호 입력 칸과 목록(쪽·구역은 번호들, 줄은 첫 줄과 마지막 줄), 스타일·조판 부호·책갈피는 이름 목록이다.
 // 입력 칸에 이름을 치면 목록에서 그 이름을 고른다. 어디로 가는지는 코어(goTo·goToPage·goToSection·bookmark)가 정한다.
 const GOTO_KINDS = [["page", "쪽(P)"], ["section", "구역(A)"], ["line", "줄(L)"], ["style", "스타일(S)"], ["mark", "조판 부호(R)"], ["bookmark", "책갈피(B)"]];

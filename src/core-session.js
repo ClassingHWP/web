@@ -36,6 +36,11 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
       onCamera?.(msg.camera);
       return;
     }
+    if (typeof msg.openUrl === "string" && msg.id == null) {
+      // 플랫폼 일: 브라우저 새 탭으로 연다.
+      globalThis.open?.(msg.openUrl, "_blank", "noopener");
+      return;
+    }
     if (msg.screenOps && msg.id == null) {
       onScreenOps?.(msg.screenOps);
       return;
@@ -102,6 +107,8 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
         : copyBytes(bytes);
       return call("open", { bytes: payload }, [payload.buffer]);
     },
+    // 암호를 기다리는 문서(open 이 needPassword 를 준 문서)를 이 암호로 연다.
+    unlock: (password) => call("unlock", { password: String(password ?? "") }),
     // 열린 문서를 저장한다. 형식과 내려받을 이름(끝 붙이기)은 코어가 정한다. { bytes, name } 을 돌려준다.
     saveDocument: (name) => call("save", { name: String(name || "") }),
     // 저장된 줄 높이를 빌릴지는 core 가 정한다. measured 는 한글과 견주는 시험용이다.
@@ -169,6 +176,17 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editDeleteMarks: (fields) => call("editDeleteMarks", { fields: fields || {} }),
     editCopyShape: (action, type) => call("editCopyShape", { action: String(action), type: Number(type) | 0 }),
     bookmarkView: () => call("bookmarkView", {}),
+    // 누름틀 고치기. 값 이름(direction, memo, name, editable)과 규칙은 코어가 정한다.
+    clickHereView: () => call("clickHereView", {}),
+    editClickHere: (fields) => call("editClickHere", { fields: fields || {} }),
+    // 스타일 대화 상자. 목록·정보·초안과 명령 규칙은 코어(styleViewNow·editStyleCommand)가 정한다.
+    styleView: (styleId) => call("styleView", { styleId: Number(styleId) | 0 }),
+    styleCommand: (action, fields) => call("styleCommand", { action: String(action), fields: fields || {} }),
+    // 차례 만들기·새로 고침. 규칙은 코어(editToc)가 정한다.
+    tocCommand: (action, fields) => call("tocCommand", { action: String(action), fields: fields || {} }),
+    // 스타일 가져오기 파일(바이트)과 스타일 내보내기(HWPX 바이트).
+    openStyleSource: (bytes) => call("openStyleSource", { bytes }),
+    exportStyles: () => call("exportStyles", {}),
     // 표/셀 속성. 값 이름과 규칙은 코어(tablePropertiesView·editTableProperties)가 정한다.
     editTableProperties: (fields) => call("editTableProperties", { fields: fields || {} }),
     tablePropertiesView: () => call("tablePropertiesView", {}),
@@ -191,6 +209,12 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     applyViewGuides: (fields) => call("applyViewGuides", { fields: fields || {} }),
     // 하이퍼링크 넣기. 필드와 글자 모양은 코어가 정한다.
     editInsertHyperlink: (text, url) => call("editInsertHyperlink", { text: String(text ?? ""), url: String(url ?? "") }),
+    // PDF 바이트(ArrayBuffer). 쪽을 어떻게 그려 묶을지는 코어가 정한다.
+    exportPdf: (dpi) => call("exportPdf", { dpi: Number(dpi) || 200 }),
+    // 수식 편집기. 넣을지·고칠지와 크기는 코어(equationView·editEquation)가 정하고, 미리 보기는 코어가 그린 SVG 다.
+    equationView: () => call("equationView", {}),
+    editEquation: (script, baseUnit) => call("editEquation", { script: String(script ?? ""), baseUnit: Number(baseUnit) || 0 }),
+    equationPreview: (script, baseUnit) => call("equationPreview", { script: String(script ?? ""), baseUnit: Number(baseUnit) || 1000 }),
     editPageControl: (kind, fields) => call("editPageControl", { kind: String(kind), fields: fields || {} }),
     pageControlFields: (kind) => call("pageControlFields", { kind: String(kind) }),
     editShortcut: (command) => call("editShortcut", { command: String(command) }),
