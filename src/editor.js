@@ -399,6 +399,11 @@ export function attachEditor(ctx) {
       if (blocked() || !bytes) return Promise.resolve(null);
       return queueEdit(() => session.editInsertPicture(bytes));
     },
+    // 그림 글머리표. 고른 파일 바이트를 그대로 코어에 넘긴다.
+    pictureBullet(bytes) {
+      if (blocked() || !bytes) return Promise.resolve(null);
+      return queueEdit(() => session.editPictureBullet(bytes));
+    },
     // 표 만들기 대화 상자.
     insertTable(rows, cols, fields) {
       if (blocked()) return Promise.resolve(null);
@@ -526,6 +531,15 @@ export function attachEditor(ctx) {
     async tablePropertiesView() {
       await coreReady;
       return session.tablePropertiesView();
+    },
+    // 고른 개체의 개체 속성(그림·도형).
+    objectProperties(fields) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editSelectedObject(fields));
+    },
+    async objectPropertiesView() {
+      await coreReady;
+      return session.selectedObjectView();
     },
     // 덧말 넣기·글자 겹치기.
     glyphGroup(fields) {

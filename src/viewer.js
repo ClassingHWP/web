@@ -1669,6 +1669,7 @@ export function createViewer(host, options = {}) {
     applyPageSetup: editor.applyPageSetup,
     drawShape: editor.drawShape,
     insertPicture: editor.insertPicture,
+    pictureBullet: editor.pictureBullet,
     insertTable: editor.insertTable,
     tableEdit: editor.tableEdit,
     insertBreak: editor.insertBreak,
@@ -1710,6 +1711,8 @@ export function createViewer(host, options = {}) {
       return result;
     }),
     tablePropertiesView: editor.tablePropertiesView,
+    objectProperties: editor.objectProperties,
+    objectPropertiesView: editor.objectPropertiesView,
     glyphGroup: editor.glyphGroup,
     glyphGroupView: editor.glyphGroupView,
     sortParagraphs: editor.sortParagraphs,

@@ -724,6 +724,14 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result: null });
       return;
     }
+    if (msg.op === "editPictureBullet") {
+      await fontsReady;
+      const packed = chwp.editPictureBullet(msg.bytes);
+      msg.bytes = null;
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
     if (msg.op === "editInsertPicture") {
       await fontsReady;
       const packed = chwp.editInsertPicture(msg.bytes);
@@ -943,6 +951,17 @@ self.onmessage = async (event) => {
     if (msg.op === "glyphGroupView") {
       await fontsReady;
       self.postMessage({ id: msg.id, ok: true, result: chwp.glyphGroupView() });
+      return;
+    }
+    if (msg.op === "selectedObjectView") {
+      await fontsReady;
+      self.postMessage({ id: msg.id, ok: true, result: chwp.selectedObjectView() });
+      return;
+    }
+    if (msg.op === "editSelectedObject") {
+      await fontsReady;
+      const { result, transfers } = unpackEditResult(chwp.editSelectedObject(msg.fields || {}));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
     if (msg.op === "tablePropertiesView") {

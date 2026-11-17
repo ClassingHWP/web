@@ -40,7 +40,7 @@ import { applyStyle, FormatBar, useStyleNames } from "./FormatBar.jsx";
 import { useZoomState, ZoomDialog } from "./ZoomDialog.jsx";
 import { openBlockCalcDialog } from "./BlockCalcDialog.jsx";
 import { openProofMarkDialog } from "./ProofMarkDialog.jsx";
-import { bandTab, masterTab, noteTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
+import { bandTab, masterTab, noteTab, pictureTab, shapeTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
 import { openTocDialog, updateToc } from "./TocDialog.jsx";
 import { FormatDialogs, openFormatDialog } from "./FormatDialogs.jsx";
 import { openTableDialog } from "./TableDialog.jsx";
@@ -67,7 +67,7 @@ import { openColumnDialog } from "./ColumnDialog.jsx";
 import { openGridDialog, openMoveGuideDialog } from "./GuideDialogs.jsx";
 import { openEquationDialog } from "./EquationDialog.jsx";
 import { printDocument, savePdf } from "./ui-actions.js";
-import { applyViewGuides, drawShape, insertBreak, newDocument, toggleFullScreen, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useInTable, useMaster, useNote, useOverwrite, useRulersShown, useViewGuides, useWide } from "./ui-actions.js";
+import { applyViewGuides, drawShape, insertBreak, newDocument, toggleFullScreen, notReady, openFile, pickPicture, requestZoom, saveAs, selectionAction, toggleOverwrite, toggleRulers, useBand, useInTable, useMaster, useNote, useOverwrite, useRulersShown, useViewGuides, useWide , useObjectKind } from "./ui-actions.js";
 import {
   Menubar,
   MenubarCheckboxItem,
@@ -499,8 +499,14 @@ export function AppMenuBar() {
   const master = useMaster();
   const [masterPicked, setMasterPicked] = useState(false);
   useEffect(() => setMasterPicked(master), [master]);
+  // 그림·도형을 고르면 그림·도형 탭을 고른다. 고르기를 풀면 원래 탭으로 돌아간다.
+  const objectKind = useObjectKind();
+  const objectTab = objectKind === "picture" ? pictureTab : objectKind === "shape" ? shapeTab : "";
+  const inPicture = !!objectTab;
+  const [picturePicked, setPicturePicked] = useState(false);
+  useEffect(() => setPicturePicked(inPicture), [inPicture, objectTab]);
   const shown = master && masterPicked ? masterTab : band > 0 && bandPicked ? bandTab : note > 0 && notePicked ? noteTab
-    : inTable && tablePicked ? tablePicked : ribbon;
+    : inPicture && picturePicked ? objectTab : inTable && tablePicked ? tablePicked : ribbon;
 
   useEffect(() => {
     const el = headerRef.current;
@@ -514,7 +520,9 @@ export function AppMenuBar() {
 
   function pickRibbon(label) {
     setOpenMenu("");
-    const fromBand = (band > 0 && bandPicked) || (note > 0 && notePicked) || (inTable && tablePicked);
+    const fromBand = (band > 0 && bandPicked) || (note > 0 && notePicked) || (inTable && tablePicked) ||
+      (inPicture && picturePicked);
+    setPicturePicked(false);
     setBandPicked(false);
     setNotePicked(false);
     setTablePicked("");
@@ -623,6 +631,22 @@ export function AppMenuBar() {
                     }}
                   >
                     {noteTab}
+                  </button>
+                </div>
+              ) : null}
+              {inPicture ? (
+                <div className={`flex items-center rounded-[0.45em] ${shown === objectTab ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : ""}`}>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={shown === objectTab}
+                    className={`h-[1.65em] px-[0.8em] text-[#1d4ed8] ${shown === objectTab ? "font-medium" : ""}`}
+                    onClick={() => {
+                      setOpenMenu("");
+                      setPicturePicked(true);
+                    }}
+                  >
+                    {objectTab}
                   </button>
                 </div>
               ) : null}

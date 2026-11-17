@@ -20,6 +20,8 @@ import { notReady, pickPicture, useWide } from "./ui-actions.js";
 import { openTableDialog, TableDialog } from "./TableDialog.jsx";
 import { RowColDialog, openRowColDialog } from "./RowColDialog.jsx";
 import { CellBorderFillDialog } from "./CellBorderFillDialog.jsx";
+import { ObjectPropertiesDialog } from "./ObjectPropertiesDialog.jsx";
+import { HeadingShapeDialog, openHeadingShapeDialog } from "./HeadingShapeDialog.jsx";
 import { PageControlDialog } from "./PageDialogs.jsx";
 import { SymbolDialog } from "./SymbolDialog.jsx";
 import { HyperlinkDialog, openHyperlinkDialog } from "./HyperlinkDialog.jsx";
@@ -1168,6 +1170,7 @@ export function FormatDialogs() {
       if (name === "splitCell") openTableDialog("split");
       // 표 안 Alt+Insert·Alt+Delete(한글 InsertTableRowColumnDlg·DeleteTableRowColumnDlg).
       if (name === "insertRowCol") openRowColDialog("insert");
+      if (name === "headingShape") openHeadingShapeDialog();
       if (name === "deleteRowCol") openRowColDialog("delete");
       if (name === "goTo") openGoToDialog();
       if (name === "bookmark") openBookmarkDialog();
@@ -1209,6 +1212,8 @@ export function FormatDialogs() {
       <TableDialog />
       <RowColDialog />
       <CellBorderFillDialog />
+      <ObjectPropertiesDialog />
+      <HeadingShapeDialog />
       <PageControlDialog />
       <SymbolDialog />
       <HyperlinkDialog />

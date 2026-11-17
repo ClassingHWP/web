@@ -373,6 +373,31 @@ export function tablePropertiesView() {
   return Promise.resolve(window.__chwpTablePropertiesView());
 }
 
+// 고른 개체(그림·도형)의 개체 속성. 넣지 못하면 코어가 준 까닭을 알린다.
+export function setObjectProperties(fields) {
+  if (typeof window.__chwpObjectProperties !== "function") return Promise.resolve(null);
+  return Promise.resolve(window.__chwpObjectProperties(fields)).then((result) => {
+    if (result && !result.documentChanged && result.error) toast(result.error, "info", null, { key: "objectProps" });
+    return result;
+  });
+}
+
+export function objectPropertiesView() {
+  if (typeof window.__chwpObjectPropertiesView !== "function") return Promise.resolve(null);
+  return Promise.resolve(window.__chwpObjectPropertiesView());
+}
+
+// 고른 개체의 갈래(코어 커서 상태의 object: picture·shape·table·equation, 없으면 빈 글).
+export function useObjectKind() {
+  const [kind, setKind] = useState(() => String(window.__chwpCursorStyle?.caret?.object || ""));
+  useEffect(() => {
+    const onCaret = (event) => setKind(String(event.detail?.object || ""));
+    window.addEventListener("chwp-caret-status", onCaret);
+    return () => window.removeEventListener("chwp-caret-status", onCaret);
+  }, []);
+  return kind;
+}
+
 // 덧말 넣기·글자 겹치기(fields.kind 가 ruby·compose). 넣지 못하면 코어가 준 까닭을 알린다.
 export function setGlyphGroup(fields) {
   if (typeof window.__chwpGlyphGroup !== "function") return Promise.resolve(null);

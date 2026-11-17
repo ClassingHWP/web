@@ -8,6 +8,8 @@ import { openTableDialog } from "./TableDialog.jsx";
 import { openRowColDialog } from "./RowColDialog.jsx";
 import { openTableFlipDialog } from "./TableFlipDialog.jsx";
 import { openCellBorderFillDialog } from "./CellBorderFillDialog.jsx";
+import { openObjectPropertiesDialog } from "./ObjectPropertiesDialog.jsx";
+import { openHeadingShapeDialog } from "./HeadingShapeDialog.jsx";
 import { printDocument, runShortcut, selectionAction, tableEdit } from "./ui-actions.js";
 
 // 오른쪽 클릭 상황 메뉴. 갈래(kind)는 코어(contextMenuKind)가 고른 상태를 보고 정하고, 항목 차례는 한글 2024
@@ -23,6 +25,7 @@ const print = { label: "인쇄...", run: printDocument };
 const charShape = { label: "글자 모양...", run: () => openFormatDialog("char") };
 const paraShape = { label: "문단 모양...", run: () => openFormatDialog("para") };
 const style = { label: "스타일...", run: () => openFormatDialog("style") };
+const headingShape = { label: "문단 번호 모양...", run: () => openHeadingShapeDialog("number") };
 const hyperlink = { label: "하이퍼링크...", run: openHyperlinkDialog };
 const memo = { label: "메모 넣기", run: () => openMemoDialog("insert") };
 const cellProps = { label: "표/셀 속성...", run: openTablePropertiesDialog };
@@ -32,12 +35,15 @@ const addRowCol = { label: "줄/칸 추가하기...", run: () => openRowColDialo
 const delRowCol = { label: "줄/칸 지우기...", run: () => openRowColDialog("delete") };
 const flip = { label: "표 뒤집기...", run: openTableFlipDialog };
 const caption = { label: "캡션 넣기", run: () => runShortcut("captionToggle") };
+const objectProps = { label: "개체 속성...", run: openObjectPropertiesDialog };
 const sep = { separator: true };
+const group = { label: "개체 묶기", run: () => runShortcut("groupObjects") };
+const ungroup = { label: "개체 풀기", run: () => runShortcut("ungroupObjects") };
 
 const menus = {
-  body: [paste, symbol, sep, print, sep, charShape, paraShape, style, sep, hyperlink, memo],
-  block: [cut, copy, paste, clear, sep, charShape, paraShape, style, sep, hyperlink, memo],
-  table: [paste, symbol, sep, charShape, paraShape, style, sep, memo, sep, cellProps, cellFill, sep, splitCell, addRowCol, delRowCol, sep, flip],
+  body: [paste, symbol, sep, print, sep, charShape, paraShape, style, headingShape, sep, hyperlink, memo],
+  block: [cut, copy, paste, clear, sep, charShape, paraShape, style, headingShape, sep, hyperlink, memo],
+  table: [paste, symbol, sep, charShape, paraShape, style, headingShape, sep, memo, sep, cellProps, cellFill, sep, splitCell, addRowCol, delRowCol, sep, flip],
   cellBlock: [
     cut, copy, sep, charShape, paraShape, style, sep, cellProps, cellFill, sep,
     { label: "셀 높이를 같게", run: () => tableEdit("equalHeight") },
@@ -45,8 +51,8 @@ const menus = {
     { label: "셀 합치기", run: () => tableEdit("mergeCells") },
     splitCell, addRowCol, delRowCol,
   ],
-  picture: [cut, copy, clear, sep, caption],
-  shape: [cut, copy, clear, sep, caption],
+  picture: [objectProps, sep, cut, copy, clear, sep, group, ungroup, sep, caption],
+  shape: [objectProps, sep, cut, copy, clear, sep, group, ungroup, sep, caption],
 };
 
 export function ContextMenu() {

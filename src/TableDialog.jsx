@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Minus, Plus, X } from "lucide-react";
 import { tableEdit } from "./ui-actions.js";
 
-// 표 만들기. 줄·칸 개수, 너비(단에 맞춤·문단에 맞춤), 글자처럼 취급을 받는다. 그 뜻과 표 모양(테두리 등)은
+// 표 만들기. 줄·칸 개수, 너비(단에 맞춤·문단에 맞춤·임의 값), 높이(자동·임의 값), 글자처럼 취급을 받는다. 그 뜻과 표 모양(테두리 등)은
 // 코어(editInsertTable)가 정한다. 고른 너비와 글자처럼 취급은 한글처럼 다음에 열 때도 남는다.
 // 리본·메뉴는 openTableDialog 로 연다.
 
@@ -41,6 +41,16 @@ function CountField({ label, value, max, onValue }) {
   );
 }
 
+function SizeField({ value, disabled, onValue, label }) {
+  return (
+    <span className="flex items-center gap-1">
+      <input className="ui-box h-10 w-20 rounded-md px-2 text-right disabled:opacity-50" type="number" step="0.1" min="1"
+        aria-label={label} disabled={disabled} value={value} onChange={(event) => onValue(event.target.value)} />
+      <span className="text-[0.9em] text-[#666]">mm</span>
+    </span>
+  );
+}
+
 export function TableDialog() {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState(1);
@@ -49,6 +59,9 @@ export function TableDialog() {
   const [mode, setMode] = useState("insert");
   const [widthFit, setWidthFit] = useState("column");
   const [treatAsChar, setTreatAsChar] = useState(true);
+  const [heightFit, setHeightFit] = useState("auto");
+  const [width, setWidth] = useState(148);
+  const [height, setHeight] = useState(22.6);
 
   useEffect(() => {
     // 처음 줄·칸 수와 한도는 코어가 준다. 셀 나누기는 한글처럼 1줄 2칸에서 시작한다.
@@ -65,11 +78,19 @@ export function TableDialog() {
         setRows(next === "split" ? 1 : view.values.rows);
         setCols(next === "split" ? 2 : view.values.cols);
         setLimits({ rows: view.specs.rows?.max ?? 1, cols: view.specs.cols?.max ?? 1 });
+        // 임의 값을 고르기 전에는 처음 값(코어: 단에 맞춤 폭, 자동 높이)을 흐리게 보인다.
+        if (typeof view.values.width === "number") setWidth((now) => (widthFitRef.current === "custom" ? now : view.values.width));
+        if (typeof view.values.height === "number") setHeight((now) => (heightFitRef.current === "custom" ? now : view.values.height));
       });
     };
     window.addEventListener("chwp-open-table-dialog", onOpen);
     return () => window.removeEventListener("chwp-open-table-dialog", onOpen);
   }, []);
+
+  const widthFitRef = useRef(widthFit);
+  const heightFitRef = useRef(heightFit);
+  widthFitRef.current = widthFit;
+  heightFitRef.current = heightFit;
 
   const close = () => {
     setOpen(false);
@@ -84,7 +105,11 @@ export function TableDialog() {
       tableEdit("splitCell", { rows: r, cols: c });
       return;
     }
-    if (typeof window.__chwpInsertTable === "function") void window.__chwpInsertTable(r, c, { widthFit, treatAsChar });
+    if (typeof window.__chwpInsertTable === "function") void window.__chwpInsertTable(r, c, {
+      widthFit, treatAsChar,
+      ...(widthFit === "custom" ? { width: Number(width) || 0 } : {}),
+      ...(heightFit === "custom" ? { height: Number(height) || 0 } : {}),
+    });
   };
 
   return (
@@ -92,7 +117,7 @@ export function TableDialog() {
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-[80] bg-black/45" />
         <DialogPrimitive.Content
-          className="toolbar-ui ui-chrome fixed inset-x-0 bottom-0 z-[80] flex flex-col gap-4 rounded-t-[18px] bg-white px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] outline-none lg:inset-auto lg:top-1/2 lg:left-1/2 lg:w-[400px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:flex-row lg:gap-5 lg:rounded-[10px] lg:p-6 lg:shadow-[0_0_0_1px_#d4d4d4,0_20px_40px_rgba(0,0,0,0.18)]"
+          className="toolbar-ui ui-chrome fixed inset-x-0 bottom-0 z-[80] flex flex-col gap-4 rounded-t-[18px] bg-white px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] outline-none lg:inset-auto lg:top-1/2 lg:left-1/2 lg:w-[460px] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:flex-row lg:gap-5 lg:rounded-[10px] lg:p-6 lg:shadow-[0_0_0_1px_#d4d4d4,0_20px_40px_rgba(0,0,0,0.18)]"
           onOpenAutoFocus={(event) => event.preventDefault()}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -118,11 +143,21 @@ export function TableDialog() {
               <fieldset className="flex flex-col gap-2.5 rounded-lg border border-[#e5e5e5] px-3.5 pt-2 pb-3.5">
                 <legend className="px-1.5 font-medium">크기 지정</legend>
                 <label className="flex items-center justify-between gap-3">
-                  <span>너비</span>
+                  <span className="shrink-0">너비</span>
                   <select className="ui-box h-10 rounded-md px-2" value={widthFit} onChange={(event) => setWidthFit(event.target.value)}>
                     <option value="column">단에 맞춤</option>
                     <option value="paragraph">문단에 맞춤</option>
+                    <option value="custom">임의 값</option>
                   </select>
+                  <SizeField value={width} disabled={widthFit !== "custom"} onValue={setWidth} label="너비 mm" />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="shrink-0">높이</span>
+                  <select className="ui-box h-10 rounded-md px-2" value={heightFit} onChange={(event) => setHeightFit(event.target.value)}>
+                    <option value="auto">자동</option>
+                    <option value="custom">임의 값</option>
+                  </select>
+                  <SizeField value={height} disabled={heightFit !== "custom"} onValue={setHeight} label="높이 mm" />
                 </label>
               </fieldset>
             )}

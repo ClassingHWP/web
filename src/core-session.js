@@ -154,7 +154,7 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editUndo: () => call("editUndo"),
     editRedo: () => call("editRedo"),
     // 표 넣기. 표 모양은 코어가 정한다.
-    // fields: widthFit("column"·"paragraph"), treatAsChar. 뜻은 코어(editInsertTable)가 정한다.
+    // fields: widthFit("column"·"paragraph"·"custom"), width·height(mm, 임의 값), treatAsChar. 뜻은 코어(editInsertTable)가 정한다.
     editInsertTable: (rows, cols, fields) => call("editInsertTable", { rows: rows | 0, cols: cols | 0, fields: fields || {} }),
     // 나누기(page, column, columnDef, section). 자리와 규칙은 코어가 정한다.
     editInsertBreak: (kind) => call("editInsertBreak", { kind: String(kind) }),
@@ -193,6 +193,9 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     // 표/셀 속성. 값 이름과 규칙은 코어(tablePropertiesView·editTableProperties)가 정한다.
     editTableProperties: (fields) => call("editTableProperties", { fields: fields || {} }),
     tablePropertiesView: () => call("tablePropertiesView", {}),
+    // 고른 개체의 개체 속성. 값 이름과 규칙은 코어(objectPropertiesView·objectProperties)가 정한다.
+    selectedObjectView: () => call("selectedObjectView", {}),
+    editSelectedObject: (fields) => call("editSelectedObject", { fields: fields || {} }),
     // 덧말 넣기·글자 겹치기. 값 이름과 규칙은 코어(glyphGroupView·editGlyphGroup)가 정한다.
     editGlyphGroup: (fields) => call("editGlyphGroup", { fields: fields || {} }),
     glyphGroupView: () => call("glyphGroupView", {}),
@@ -232,6 +235,11 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editInsertPicture: (bytes) => {
       const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
       return call("editInsertPicture", { bytes: payload }, [payload.buffer]);
+    },
+    // 그림 글머리표. 고른 그림 파일 바이트만 넘긴다.
+    editPictureBullet: (bytes) => {
+      const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
+      return call("editPictureBullet", { bytes: payload }, [payload.buffer]);
     },
     // 글꼴 고르기 목록. 라이선스로 막힌 글꼴은 코어가 빼고 준다.
     pickableFonts: () => call("pickableFonts"),

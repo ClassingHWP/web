@@ -184,6 +184,7 @@ export function startAppViewer(host) {
   window.__chwpApplyPageSetup = viewer.applyPageSetup;
   window.__chwpDrawShape = viewer.drawShape;
   window.__chwpInsertPicture = viewer.insertPicture;
+  window.__chwpPictureBullet = viewer.pictureBullet;
   window.__chwpInsertTable = viewer.insertTable;
   window.__chwpTableEdit = viewer.tableEdit;
   window.__chwpInsertBreak = viewer.insertBreak;
@@ -217,6 +218,8 @@ export function startAppViewer(host) {
   });
   window.__chwpStyleCommand = viewer.styleCommand;
   window.__chwpTablePropertiesView = viewer.tablePropertiesView;
+  window.__chwpObjectProperties = viewer.objectProperties;
+  window.__chwpObjectPropertiesView = viewer.objectPropertiesView;
   window.__chwpGlyphGroup = viewer.glyphGroup;
   window.__chwpGlyphGroupView = viewer.glyphGroupView;
   window.__chwpConvertText = viewer.convertText;

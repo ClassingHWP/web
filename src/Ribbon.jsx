@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ChevronsDown, Ellipsis, Expand, Maximize2 } from "lucide-react";
 import { ribbonIcons } from "./ribbon-icons.js";
 import { aligns, applyStyle, useCursorStyle, useStyleNames } from "./FormatBar.jsx";
-import { applyViewGuides, exchangeNotes, runShortcut, setColumns, setCaption, setNoteShape, leaveNote, cellBorder, drawShape, fontLanguages, fontOfLanguage, insertNote, leaveBand, notReady, pageControl, toggleMasterOption, toggleLineNumbers, toggleSuppressLineNumbers, pickPicture, requestZoom, selectionAction, setFontLanguage, setTablePen, tableEdit, insertBreak, toggleRulers, useFontLanguage, useRulersShown, useTablePen, useViewGuides } from "./ui-actions.js";
+import { applyViewGuides, exchangeNotes, runShortcut, setColumns, setCaption, setNoteShape, leaveNote, cellBorder, drawShape, fontLanguages, fontOfLanguage, insertNote, leaveBand, notReady, pageControl, toggleMasterOption, toggleLineNumbers, toggleSuppressLineNumbers, pickPicture, requestZoom, selectionAction, setFontLanguage, setTablePen, tableEdit, insertBreak, toggleRulers, useFontLanguage, useRulersShown, useTablePen, useViewGuides , setObjectProperties } from "./ui-actions.js";
 import { ColorPalette, ColorPopover } from "./ColorPicker.jsx";
 import { applyPageSetup, lineShapeLabels, openFormatDialog, pageMarginPresets } from "./FormatDialogs.jsx";
 import { LineTypeIcon, LineWidthIcon } from "./ShapeIcons.jsx";
@@ -20,6 +20,8 @@ import { openComposeDialog, openRubyDialog } from "./GlyphGroupDialog.jsx";
 import { openCaseDialog, openWidthDialog } from "./TextConvertDialog.jsx";
 import { openTableToTextDialog, openTextToTableDialog } from "./TableTextDialog.jsx";
 import { openTableFlipDialog } from "./TableFlipDialog.jsx";
+import { openObjectPropertiesDialog } from "./ObjectPropertiesDialog.jsx";
+import { openHeadingShapeDialog } from "./HeadingShapeDialog.jsx";
 import { openRowColDialog } from "./RowColDialog.jsx";
 import { openCellBorderFillDialog } from "./CellBorderFillDialog.jsx";
 import { openTableSortDialog } from "./TableSortDialog.jsx";
@@ -60,6 +62,10 @@ export const masterTab = "바탕쪽";
 export const tableDesignTab = "표 디자인";
 export const tableLayoutTab = "표 레이아웃";
 export const tableTabs = [tableDesignTab, tableLayoutTab];
+// 그림을 골랐을 때만 생기는 탭(한글 2024 그림 상황 탭에서 ClassingHWP 에 있는 명령).
+export const pictureTab = "그림";
+// 도형을 골랐을 때만 생기는 탭(한글 2024 도형 상황 탭에서 ClassingHWP 에 있는 명령).
+export const shapeTab = "도형";
 
 function RibbonIcon({ name, className = "size-[1.45em]" }) {
   const body = ribbonIcons[name];
@@ -565,6 +571,9 @@ const outlineMenu = {
     { type: "separator" },
     { label: "한 수준 아래로", run: () => applyStyle({ headingLevelStep: 1 }) },
     { label: "한 수준 위로", run: () => applyStyle({ headingLevelStep: -1 }) },
+    { type: "separator" },
+    { label: "문단 번호 모양...", run: () => openHeadingShapeDialog("number") },
+    { label: "글머리표 모양...", run: () => openHeadingShapeDialog("bullet") },
   ],
 };
 // 스타일 단추 메뉴: 스타일 대화 상자(F6)와 문서 스타일들.
@@ -835,6 +844,16 @@ const cellBorderMenu = { menu: true, menuItems: cellBorderItems };
 
 // 표 채우기: 블록 칸 배경. 채우기 없음이면 배경을 지운다.
 const pickTableFill = (hex) => tableEdit("cellFill", { color: hex || "none" });
+// 셀 음영(한글 표 디자인 탭 셀 음영): 증가 6칸, 감소 6칸, 음영 없음. 색을 고치는 규칙은 코어(cellShade)가 정한다.
+const cellShadeItems = [
+  // 한글 셀 음영 칸 이름(풍선 도움말): 증가 +10%~+60%, 감소 -10%~-60%.
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({ label: `증가 +${n * 10}%`, run: () => tableEdit("cellShade", { count: n }) })),
+  { type: "separator" },
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({ label: `감소 -${n * 10}%`, run: () => tableEdit("cellShade", { count: -n }) })),
+  { type: "separator" },
+  { label: "셀 음영 없음", run: () => tableEdit("cellShade", { count: 0 }) },
+  { label: "셀 음영 설정...", run: () => openCellBorderFillDialog() },
+];
 
 // 테두리 종류·굵기 목록은 코어가 준다(문단 모양 테두리와 같은 목록).
 function usePenChoices() {
@@ -893,7 +912,7 @@ function TablePenGrid({ onUse }) {
       {menu("테두리 종류", <LineTypeIcon type={pen.lineType || "SOLID"} />, typeItems)}
       {menu("테두리", small("셀 테두리"), cellBorderItems)}
       {menu("테두리 굵기", <LineWidthIcon hu={pen.lineWidth || 34} />, widthItems)}
-      <button type="button" className={row} title="셀 음영" onClick={() => run({ label: "셀 음영" }, onUse)}>{small("셀 음영")}셀 음영{caret}</button>
+      {menu("셀 음영", small("셀 음영"), cellShadeItems)}
       <ColorPopover title="테두리 색" value={pen.lineColor || "#000000"} onPick={(hex) => { onUse?.(); setTablePen({ lineColor: hex || "" }); }}>
         <button type="button" className={row} title="테두리 색">
           <span className="h-[0.9em] w-[1.1em] rounded-[2px] border border-[#d4d4d4]" style={{ backgroundColor: pen.lineColor || "#000000" }} />
@@ -959,6 +978,88 @@ const tableInsertItems = [
 ];
 
 // 탭별 리본. 시안 Main.dc.html 의 순서·묶음 그대로다.
+// 그림 탭. 값과 규칙은 코어(고른 개체의 개체 속성)가 정한다.
+const pictureSet = (fields) => ({ run: () => void setObjectProperties(fields) });
+const pictureTabItems = [
+  big("개체 속성", { icon: "그림", run: () => openObjectPropertiesDialog() }),
+  sep,
+  big("그림 효과", { icon: "그림", menu: true, menuItems: [
+    { label: "원래 그림", ...pictureSet({ effect: 0 }) },
+    { label: "회색조", ...pictureSet({ effect: 1 }) },
+    { label: "흑백", ...pictureSet({ effect: 2 }) },
+  ] }),
+  sep,
+  big("글자처럼 취급", { icon: "글자처럼 취급", menu: true, menuItems: [
+    { label: "글자처럼 취급", ...pictureSet({ treatAsChar: true }) },
+    { label: "글자처럼 취급 안 함", ...pictureSet({ treatAsChar: false }) },
+  ] }),
+  big("배치", { icon: "글자처럼 취급", menu: true, menuItems: [
+    { label: "어울림", ...pictureSet({ treatAsChar: false, textWrap: "SQUARE" }) },
+    { label: "자리 차지", ...pictureSet({ treatAsChar: false, textWrap: "TOP_AND_BOTTOM" }) },
+    { label: "글 앞으로", ...pictureSet({ treatAsChar: false, textWrap: "IN_FRONT_OF_TEXT" }) },
+    { label: "글 뒤로", ...pictureSet({ treatAsChar: false, textWrap: "BEHIND_TEXT" }) },
+  ] }),
+  big("캡션", { run: () => runShortcut("captionToggle") }),
+];
+
+// 개체 순서(한글 ShapeObjBringToFront·BringForward·SendToBack·SendBack). 순서를 바꾸는 규칙은 코어가 정한다.
+const objectOrderMenu = { icon: "그림", menu: true, menuItems: [
+  { label: "맨 앞으로", ...pictureSet({ order: "front" }) },
+  { label: "앞으로", ...pictureSet({ order: "forward" }) },
+  { label: "맨 뒤로", ...pictureSet({ order: "back" }) },
+  { label: "뒤로", ...pictureSet({ order: "backward" }) },
+] };
+pictureTabItems.splice(pictureTabItems.length - 1, 0, big("순서", objectOrderMenu));
+// 회전(한글 회전 단추: 왼쪽·오른쪽으로 90도 회전, 좌우·상하 대칭). 대칭은 누를 때마다 켜고 끈다.
+// 돌린 상자의 가운데를 지키는 규칙은 코어(objectProperties rotate)가 정한다.
+const objectFlipMenu = { icon: "그림", menu: true, menuItems: [
+  { label: "개체 회전", run: () => runShortcut("rotateObjectMode") },
+  { label: "왼쪽으로 90도 회전", ...pictureSet({ rotate: "left" }) },
+  { label: "오른쪽으로 90도 회전", ...pictureSet({ rotate: "right" }) },
+  { label: "좌우 대칭", ...pictureSet({ flip: "horizontal" }) },
+  { label: "상하 대칭", ...pictureSet({ flip: "vertical" }) },
+] };
+pictureTabItems.splice(pictureTabItems.length - 1, 0, big("회전", objectFlipMenu));
+// 개체 묶기·풀기(한글 Group·Ungroup, 개체를 고르고 G·U). Shift 로 여러 개체를 고른 뒤 묶는다. 규칙은 코어가 정한다.
+const objectGroupMenu = { icon: "그림", menu: true, menuItems: [
+  { label: "개체 묶기", run: () => runShortcut("groupObjects") },
+  { label: "개체 풀기", run: () => runShortcut("ungroupObjects") },
+] };
+pictureTabItems.splice(pictureTabItems.findIndex((item) => item.label === "순서"), 0, big("그룹", objectGroupMenu));
+
+// 도형 선 색·채우기 색. 고른 색을 코어에 넘긴다.
+function ShapeColors({ onUse }) {
+  const row = "ui-ghost flex h-[1.75em] items-center gap-[0.35em] rounded-[0.35em] px-[0.4em] text-[0.92em]";
+  return (
+    <div className="flex flex-none flex-col justify-center gap-[0.2em]">
+      <ColorPopover title="선 색" value="#000000" onPick={(hex) => { onUse?.(); void setObjectProperties({ lineColor: (hex || "#000000").toUpperCase() }); }}>
+        <button type="button" className={row} title="선 색">선 색</button>
+      </ColorPopover>
+      <ColorPopover title="채우기" value="#ffffff" allowNone noneLabel="채우기 없음" onPick={(hex) => { onUse?.(); void setObjectProperties({ fillColor: hex ? hex.toUpperCase() : "none" }); }}>
+        <button type="button" className={row} title="채우기">채우기</button>
+      </ColorPopover>
+    </div>
+  );
+}
+
+const shapeLineWidths = [0.1, 0.12, 0.2, 0.3, 0.4, 0.5, 1.0, 2.0].map((mm) => ({ label: `${mm} mm`, ...pictureSet({ lineWidth: Math.round((mm * 7200) / 25.4) }) }));
+const shapeLineTypes = [["SOLID", "실선"], ["DASH", "파선"], ["DOT", "점선"], ["DASH_DOT", "일점쇄선"], ["NONE", "선 없음"]]
+  .map(([id, label]) => ({ label, ...pictureSet({ lineType: id }) }));
+const shapeTabItems = [
+  big("개체 속성", { icon: "그림", run: () => openObjectPropertiesDialog() }),
+  sep,
+  custom(ShapeColors),
+  big("선 종류", { icon: "셀 테두리", menu: true, menuItems: shapeLineTypes }),
+  big("선 굵기", { icon: "셀 테두리", menu: true, menuItems: shapeLineWidths }),
+  sep,
+  big("그룹", objectGroupMenu),
+  big("순서", objectOrderMenu),
+  big("회전", objectFlipMenu),
+  big("글자처럼 취급", pictureTabItems.find((item) => item.label === "글자처럼 취급")),
+  big("배치", pictureTabItems.find((item) => item.label === "배치")),
+  big("캡션", { run: () => runShortcut("captionToggle") }),
+];
+
 const ribbons = {
   [tableDesignTab]: [
     big("표 만들기", { icon: "표", run: openTableDialog }),
@@ -1011,6 +1112,8 @@ const ribbons = {
     big("캡션", captionMenu),
   ],
   [noteTab]: noteTabItems,
+  [pictureTab]: pictureTabItems,
+  [shapeTab]: shapeTabItems,
   [masterTab]: masterTabItems,
   [bandTab]: [
     big("머리말", headerMenu),
@@ -1445,7 +1548,7 @@ const mobilePages = {
   [tableDesignTab]: [
     ["표", [tile("표 만들기", { icon: "표", run: openTableDialog }), tile("표 속성", { icon: "표", run: openTablePropertiesDialog }), tile("표 스타일", { icon: "표", menu: true }), tile("표마당", { icon: "표" })]],
     ["테두리", [tile("테두리", { icon: "셀 테두리", ...cellBorderMenu }), view(MobilePenMenu, { kind: "type" }), view(MobilePenMenu, { kind: "width" }), view(MobilePenColor)]],
-    ["채우기", [view(MobileTableFill), tile("셀 음영", { icon: "셀 배경색" })]],
+    ["채우기", [view(MobileTableFill), tile("셀 음영", { icon: "셀 배경색", menu: true, menuItems: cellShadeItems })]],
   ],
   [tableLayoutTab]: [
     ["추가", tableInsertItems.map((item) => tile(item.label, item))],
