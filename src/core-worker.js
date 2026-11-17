@@ -475,6 +475,10 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result: JSON.parse(chwp.cacheUsage()) });
       return;
     }
+    if (msg.op === "contextMenuKind") {
+      self.postMessage({ id: msg.id, ok: true, result: String(chwp.contextMenuKind()) });
+      return;
+    }
     if (msg.op === "hover") {
       self.postMessage({ id: msg.id, ok: true, result: String(chwp.hoverCursor(Number(msg.x) || 0, Number(msg.y) || 0)) });
       return;
@@ -730,7 +734,7 @@ self.onmessage = async (event) => {
     }
     if (msg.op === "editInsertTable") {
       await fontsReady;
-      const packed = chwp.editInsertTable(msg.rows | 0, msg.cols | 0);
+      const packed = chwp.editInsertTable(msg.rows | 0, msg.cols | 0, msg.fields || {});
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;

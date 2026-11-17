@@ -5,6 +5,7 @@ import { PencilLine } from "lucide-react";
 import { AppMenuBar } from "./AppMenuBar.jsx";
 import { FontSwapDialog } from "./FontSwapDialog.jsx";
 import { SelectionMenu } from "./SelectionMenu.jsx";
+import { ContextMenu } from "./ContextMenu.jsx";
 import { Button } from "@/components/ui/button";
 import { editButtonShown, setReadOnly, startAppViewer } from "./app-viewer.js";
 import "./viewer.css";
@@ -34,6 +35,7 @@ function DocumentShell() {
         <section ref={host} />
       </div>
       <SelectionMenu />
+      <ContextMenu />
     </>
   );
 }

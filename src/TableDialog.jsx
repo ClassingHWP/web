@@ -3,7 +3,8 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { Minus, Plus, X } from "lucide-react";
 import { tableEdit } from "./ui-actions.js";
 
-// 표 만들기. 줄·칸 개수만 받고, 표 모양(너비 단에 맞춤·글자처럼 취급·테두리)은 코어(editInsertTable)가 정한다.
+// 표 만들기. 줄·칸 개수, 너비(단에 맞춤·문단에 맞춤), 글자처럼 취급을 받는다. 그 뜻과 표 모양(테두리 등)은
+// 코어(editInsertTable)가 정한다. 고른 너비와 글자처럼 취급은 한글처럼 다음에 열 때도 남는다.
 // 리본·메뉴는 openTableDialog 로 연다.
 
 // mode 가 split 이면 셀 나누기(줄·칸 수를 받아 캐럿 칸을 나눈다)다.
@@ -46,6 +47,8 @@ export function TableDialog() {
   const [cols, setCols] = useState(1);
   const [limits, setLimits] = useState({ rows: 1, cols: 1 });
   const [mode, setMode] = useState("insert");
+  const [widthFit, setWidthFit] = useState("column");
+  const [treatAsChar, setTreatAsChar] = useState(true);
 
   useEffect(() => {
     // 처음 줄·칸 수와 한도는 코어가 준다. 셀 나누기는 한글처럼 1줄 2칸에서 시작한다.
@@ -81,7 +84,7 @@ export function TableDialog() {
       tableEdit("splitCell", { rows: r, cols: c });
       return;
     }
-    if (typeof window.__chwpInsertTable === "function") void window.__chwpInsertTable(r, c);
+    if (typeof window.__chwpInsertTable === "function") void window.__chwpInsertTable(r, c, { widthFit, treatAsChar });
   };
 
   return (
@@ -98,7 +101,7 @@ export function TableDialog() {
             }
           }}
         >
-          <DialogPrimitive.Description className="sr-only">{mode === "split" ? "칸을 나눌 줄과 칸 개수를 정합니다." : "넣을 표의 줄과 칸 개수를 정합니다."}</DialogPrimitive.Description>
+          <DialogPrimitive.Description className="sr-only">{mode === "split" ? "칸을 나눌 줄과 칸 개수를 정합니다." : "넣을 표의 줄·칸 개수와 너비, 글자처럼 취급을 정합니다."}</DialogPrimitive.Description>
           <div className="flex min-w-0 flex-1 flex-col gap-3.5">
             <div className="flex items-center">
               <DialogPrimitive.Title className="flex-1 text-[20px] font-bold">{mode === "split" ? "셀 나누기" : "표 만들기"}</DialogPrimitive.Title>
@@ -111,6 +114,27 @@ export function TableDialog() {
               <CountField label="줄 개수" value={rows} max={limits.rows} onValue={setRows} />
               <CountField label="칸 개수" value={cols} max={limits.cols} onValue={setCols} />
             </fieldset>
+            {mode === "insert" && (
+              <fieldset className="flex flex-col gap-2.5 rounded-lg border border-[#e5e5e5] px-3.5 pt-2 pb-3.5">
+                <legend className="px-1.5 font-medium">크기 지정</legend>
+                <label className="flex items-center justify-between gap-3">
+                  <span>너비</span>
+                  <select className="ui-box h-10 rounded-md px-2" value={widthFit} onChange={(event) => setWidthFit(event.target.value)}>
+                    <option value="column">단에 맞춤</option>
+                    <option value="paragraph">문단에 맞춤</option>
+                  </select>
+                </label>
+              </fieldset>
+            )}
+            {mode === "insert" && (
+              <fieldset className="flex flex-col gap-2.5 rounded-lg border border-[#e5e5e5] px-3.5 pt-2 pb-3.5">
+                <legend className="px-1.5 font-medium">기타</legend>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" className="size-4" checked={treatAsChar} onChange={(event) => setTreatAsChar(event.target.checked)} />
+                  <span>글자처럼 취급</span>
+                </label>
+              </fieldset>
+            )}
           </div>
           <div className="flex shrink-0 flex-row-reverse gap-2 border-t border-[#e5e5e5] pt-3 lg:w-[104px] lg:flex-col lg:border-0 lg:pt-11">
             <button type="button" className="ui-primary h-[54px] flex-1 rounded-[10px] lg:h-11 lg:flex-none lg:rounded-lg" onClick={apply}>{mode === "split" ? "나누기(D)" : "만들기(D)"}</button>

@@ -25,7 +25,7 @@ import { attachEditor } from "./editor.js";
 //
 // 알림(addEventListener, detail): status {text}, notice {text}, viewport, zoom, docstate {state, name}, cursorstyle, caretstatus,
 // fontlist, stylelist, colors, keybindings, zoomspec, rulers {on}, editbutton {shown}, toast {text, kind, action},
-// fontswapask {swaps}, selectionmenu {x, y, readOnly}, formatdialog {name}, saverequest, printrequest, openrequest,
+// fontswapask {swaps}, selectionmenu {x, y, readOnly}, contextmenu {x, y, kind}, formatdialog {name}, saverequest, printrequest, openrequest,
 // opened (코어 입력 답, 쪽은 0부터), openfailed {error}.
 // 마지막 값은 viewer.info 에 남는다.
 
@@ -1183,7 +1183,7 @@ export function createViewer(host, options = {}) {
   }
   root.addEventListener("pointerdown", (event) => {
     const touchOrPen = event.pointerType === "touch" || event.pointerType === "pen";
-    if (!touchOrPen && event.button !== 0 && event.button !== 1) return;
+    if (!touchOrPen && event.button !== 0 && event.button !== 1 && event.button !== 2) return;
     event.preventDefault();
     event.stopPropagation();
     // 넣은 보기는 단축키를 그릇 안에서만 받는다. 편집 입력칸이 초점을 받지 않을 때(보기 전용)는 그릇이 받는다.
@@ -1211,6 +1211,7 @@ export function createViewer(host, options = {}) {
     }
     sendPointer(event, 1, event.button);
   }, true);
+  root.addEventListener("contextmenu", (event) => event.preventDefault(), true);
   root.addEventListener("auxclick", (event) => {
     if (event.button === 1) event.preventDefault();
   }, true);
@@ -1242,6 +1243,13 @@ export function createViewer(host, options = {}) {
     lastPressClient.y = event.clientY;
     if (press.touch && event.type === "pointerup" && !press.moved && presses.size === 0) touchTapPending = true;
     sendPointer(event, event.type === "pointercancel" ? 4 : 3, press.button);
+    // 오른쪽 단추를 떼면 상황 메뉴. 누름·뗌은 코어가 받아 캐럿·고르기를 정했고, 갈래도 코어가 정한다.
+    if (press.button === 2 && event.type === "pointerup" && !readOnly) {
+      const at = { x: event.clientX, y: event.clientY };
+      void Promise.resolve(session.contextMenuKind?.()).then((kind) => {
+        if (kind) emit("contextmenu", { x: at.x, y: at.y, kind: String(kind) });
+      });
+    }
     if (press.button !== 1 && event.type === "pointerup" && !press.moved && press.touch && presses.size === 0) {
       editor.focusInput();
     }

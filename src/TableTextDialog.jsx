@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { X } from "lucide-react";
 import { tableText } from "./ui-actions.js";
@@ -46,10 +46,16 @@ export function Frame({ open, onClose, title, description, children, onApply, di
   );
 }
 
-export function useOpen(name) {
+// before 가 있으면 열기 사건(detail)을 먼저 넘긴다.
+export function useOpen(name, before) {
   const [open, setOpen] = useState(false);
+  const beforeRef = useRef(before);
+  beforeRef.current = before;
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = (event) => {
+      beforeRef.current?.(event);
+      setOpen(true);
+    };
     window.addEventListener(name, onOpen);
     return () => window.removeEventListener(name, onOpen);
   }, [name]);

@@ -153,6 +153,8 @@ const menus = [
       { label: "책갈피...", Icon: Type, command: "bookmarkDialog", onSelect: openBookmarkDialog },
       { label: "하이퍼링크 이전", Icon: Type, command: "linkBack", onSelect: () => runShortcut("linkBack") },
       { label: "하이퍼링크 다음", Icon: Type, command: "linkForward", onSelect: () => runShortcut("linkForward") },
+      { label: "날짜/시간 문자열", Icon: Type, command: "dateString", onSelect: () => runShortcut("dateString") },
+      { label: "날짜/시간 코드", Icon: Type, command: "dateField", onSelect: () => runShortcut("dateField") },
       { label: "덧말 넣기...", Icon: Type, onSelect: openRubyDialog },
       { label: "글자 겹치기...", Icon: Type, onSelect: openComposeDialog },
       { label: "각주/미주 모양...", Icon: Type, onSelect: () => openNoteShapeDialog(false) },

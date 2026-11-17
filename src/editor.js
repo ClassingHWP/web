@@ -400,9 +400,9 @@ export function attachEditor(ctx) {
       return queueEdit(() => session.editInsertPicture(bytes));
     },
     // 표 만들기 대화 상자.
-    insertTable(rows, cols) {
+    insertTable(rows, cols, fields) {
       if (blocked()) return Promise.resolve(null);
-      return queueEdit(() => session.editInsertTable(rows, cols));
+      return queueEdit(() => session.editInsertTable(rows, cols, fields));
     },
     // 단축키 편집 명령(코어 keyBindings 의 command). 무엇을 할지는 코어가 캐럿 상태를 보고 정한다.
     shortcut(command) {

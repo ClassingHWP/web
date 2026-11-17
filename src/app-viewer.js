@@ -150,6 +150,7 @@ export function startAppViewer(host) {
   relay("editbutton", "chwp-edit-button");
   relay("fontswapask", "chwp-font-swap-ask");
   relay("selectionmenu", "chwp-selection-menu");
+  relay("contextmenu", "chwp-context-menu");
   relay("formatdialog", "chwp-open-format-dialog");
   // 코어가 준 알림 글(단축키 편집의 못 찾음·고치지 못한 까닭)은 토스트로 보인다.
   viewer.addEventListener("notice", (event) => {

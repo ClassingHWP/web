@@ -18,6 +18,8 @@ import { EmphasisIcon, HatchIcon, LineTypeIcon, LineWidthIcon, OutlineIcon, Unde
 import { FontField } from "./FontField.jsx";
 import { notReady, pickPicture, useWide } from "./ui-actions.js";
 import { openTableDialog, TableDialog } from "./TableDialog.jsx";
+import { RowColDialog, openRowColDialog } from "./RowColDialog.jsx";
+import { CellBorderFillDialog } from "./CellBorderFillDialog.jsx";
 import { PageControlDialog } from "./PageDialogs.jsx";
 import { SymbolDialog } from "./SymbolDialog.jsx";
 import { HyperlinkDialog, openHyperlinkDialog } from "./HyperlinkDialog.jsx";
@@ -1164,6 +1166,9 @@ export function FormatDialogs() {
       // 단축키가 여는 다른 대화 상자(Ctrl+F·Ctrl+H 찾기, 칸 블록 S 셀 나누기).
       if (name === "find" || name === "replace") openFindDialog();
       if (name === "splitCell") openTableDialog("split");
+      // 표 안 Alt+Insert·Alt+Delete(한글 InsertTableRowColumnDlg·DeleteTableRowColumnDlg).
+      if (name === "insertRowCol") openRowColDialog("insert");
+      if (name === "deleteRowCol") openRowColDialog("delete");
       if (name === "goTo") openGoToDialog();
       if (name === "bookmark") openBookmarkDialog();
       if (name === "ruby") openRubyDialog();
@@ -1202,6 +1207,8 @@ export function FormatDialogs() {
       <PageDialog open={open === "page"} onClose={close} />
       <PageBorderDialog open={open === "pageBorder"} onClose={close} />
       <TableDialog />
+      <RowColDialog />
+      <CellBorderFillDialog />
       <PageControlDialog />
       <SymbolDialog />
       <HyperlinkDialog />

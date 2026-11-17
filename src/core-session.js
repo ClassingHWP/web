@@ -137,6 +137,8 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editFormatDialog: (kind, patch, whole) => call("editFormatDialog", { kind, patch, whole: !!whole }),
     // 마우스가 올라간 자리의 CSS 커서. 좌표는 뷰포트 장치 픽셀이다.
     hover: (x, y) => call("hover", { x, y }),
+    // 오른쪽 클릭 뒤 띄울 상황 메뉴 갈래. 무엇을 고른 상태인지는 코어가 본다.
+    contextMenuKind: () => call("contextMenuKind", {}),
     pointer: (kind, page, x, y, percent) => call("pointer", { kind, page, x, y, percent }),
     // 입력기 사건(start·update·end·settle·insert·enter). 확정·바꿔 넣기는 코어가 정한다.
     // 편집 입력칸 사건. 무엇을 넣고 지울지, 입력칸을 언제 비울지는 코어가 정한다.
@@ -152,7 +154,8 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editUndo: () => call("editUndo"),
     editRedo: () => call("editRedo"),
     // 표 넣기. 표 모양은 코어가 정한다.
-    editInsertTable: (rows, cols) => call("editInsertTable", { rows: rows | 0, cols: cols | 0 }),
+    // fields: widthFit("column"·"paragraph"), treatAsChar. 뜻은 코어(editInsertTable)가 정한다.
+    editInsertTable: (rows, cols, fields) => call("editInsertTable", { rows: rows | 0, cols: cols | 0, fields: fields || {} }),
     // 나누기(page, column, columnDef, section). 자리와 규칙은 코어가 정한다.
     editInsertBreak: (kind) => call("editInsertBreak", { kind: String(kind) }),
     // 쪽 탭 컨트롤(header, footer, deleteBand, pageNumber, newNumber, pageHiding). 자리와 규칙은 코어가 정한다.

@@ -20,6 +20,8 @@ import { openComposeDialog, openRubyDialog } from "./GlyphGroupDialog.jsx";
 import { openCaseDialog, openWidthDialog } from "./TextConvertDialog.jsx";
 import { openTableToTextDialog, openTextToTableDialog } from "./TableTextDialog.jsx";
 import { openTableFlipDialog } from "./TableFlipDialog.jsx";
+import { openRowColDialog } from "./RowColDialog.jsx";
+import { openCellBorderFillDialog } from "./CellBorderFillDialog.jsx";
 import { openTableSortDialog } from "./TableSortDialog.jsx";
 import { openTableFormulaDialog } from "./TableFormulaDialog.jsx";
 import { openDeleteMarksDialog } from "./DeleteMarksDialog.jsx";
@@ -827,7 +829,8 @@ const cellBorderItems = [
   ["위쪽 테두리", "top"], ["아래쪽 테두리", "bottom"], ["왼쪽 테두리", "left"], ["오른쪽 테두리", "right"],
   { type: "separator" },
   ["안쪽 가로 테두리", "insideHorz"], ["안쪽 세로 테두리", "insideVert"], ["대각선 ╲", "diagonalDown"], ["대각선 ╱", "diagonalUp"],
-].map((entry) => (Array.isArray(entry) ? { label: entry[0], run: () => cellBorder(entry[1]) } : entry));
+].map((entry) => (Array.isArray(entry) ? { label: entry[0], run: () => cellBorder(entry[1]) } : entry))
+  .concat([{ type: "separator" }, { label: "셀 테두리/배경...", run: () => openCellBorderFillDialog() }]);
 const cellBorderMenu = { menu: true, menuItems: cellBorderItems };
 
 // 표 채우기: 블록 칸 배경. 채우기 없음이면 배경을 지운다.
@@ -976,7 +979,7 @@ const ribbons = {
     // 보기 탭의 투명 선 표시와 같은 켜고 끄기다.
     big("투명 선", { icon: "셀 테두리", run: () => applyViewGuides({ toggle: "transparentLines" }) }),
     sep,
-    big("줄/칸 추가하기", { icon: "아래에 줄 넣기", menu: true, menuItems: tableInsertItems }),
+    big("줄/칸 추가하기", { icon: "아래에 줄 넣기", menu: true, menuItems: [...tableInsertItems, { label: "줄/칸 추가하기...", run: () => openRowColDialog("insert") }, { label: "줄/칸 지우기...", run: () => openRowColDialog("delete") }] }),
     { type: "stack", items: tableInsertItems.slice(0, 2) },
     { type: "stack", items: tableInsertItems.slice(2) },
     { type: "stack", items: [{ label: "칸 지우기", ...tableRun("deleteColumns") }, { label: "줄 지우기", ...tableRun("deleteRows") }] },
@@ -1082,6 +1085,8 @@ const ribbons = {
     { type: "stack", items: [{ label: "이전", run: () => runShortcut("linkBack") }, { label: "다음", run: () => runShortcut("linkForward") }] },
     big("책갈피", { run: openBookmarkDialog }),
     sep,
+    // 한글 날짜/시간/파일 이름 펼침: 날짜/시간 문자열(Ctrl+K,D)·날짜/시간 코드(Ctrl+K,C). 형식과 넣는 규칙은 코어가 정한다.
+    big("날짜/시간", { menu: true, menuItems: [{ label: "날짜/시간 문자열", run: () => runShortcut("dateString") }, { label: "날짜/시간 코드", run: () => runShortcut("dateField") }] }),
     big("덧말 넣기", { run: openRubyDialog }),
     big("입력 도우미", { menu: true, menuItems: [{ label: "글자 겹치기", run: openComposeDialog }] }),
   ],
