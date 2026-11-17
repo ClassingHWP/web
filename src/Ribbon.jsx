@@ -973,7 +973,8 @@ const ribbons = {
     big("표마당", { icon: "표" }),
   ],
   [tableLayoutTab]: [
-    big("투명 선", { icon: "셀 테두리" }),
+    // 보기 탭의 투명 선 표시와 같은 켜고 끄기다.
+    big("투명 선", { icon: "셀 테두리", run: () => applyViewGuides({ toggle: "transparentLines" }) }),
     sep,
     big("줄/칸 추가하기", { icon: "아래에 줄 넣기", menu: true, menuItems: tableInsertItems }),
     { type: "stack", items: tableInsertItems.slice(0, 2) },
@@ -993,9 +994,6 @@ const ribbons = {
     big("표 뒤집기", { run: openTableFlipDialog }),
     big("표 나누기", tableRun("splitTable")),
     big("표 붙이기", tableRun("mergeTable")),
-    sep,
-    big("표를 문자열로", { icon: "표", run: openTableToTextDialog }),
-    big("문자열을 표로", { icon: "표", run: openTextToTableDialog }),
     sep,
     big("채우기", { ...tableRun("autoFill"), menu: true, menuItems: [{ label: "표 자동 채우기", ...tableRun("autoFill") }] }),
     big("계산식", formulaMenu),
