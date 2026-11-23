@@ -224,6 +224,10 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editPageControl: (kind, fields) => call("editPageControl", { kind: String(kind), fields: fields || {} }),
     pageControlFields: (kind) => call("pageControlFields", { kind: String(kind) }),
     editShortcut: (command) => call("editShortcut", { command: String(command) }),
+    // 문서 암호 걸기·바꾸기·풀기(next 가 비면 푼다). 규칙은 코어가 정한다.
+    editDocumentPassword: (current, next, confirm) =>
+      call("editDocumentPassword", { current: String(current ?? ""), next: String(next ?? ""), confirm: String(confirm ?? "") }),
+    documentHasPassword: () => call("documentHasPassword"),
     editFindReplace: (mode, text, replacement, matchCase) =>
       call("editFindReplace", { mode: String(mode), text: String(text ?? ""), replacement: String(replacement ?? ""), matchCase: !!matchCase }),
     // 표 구조 편집. 칸(캐럿·칸 블록)과 규칙은 코어가 정한다.
@@ -235,6 +239,11 @@ export function createCoreSession(onLog, onCamera, onFontFaces, onScreenOps, wor
     editInsertPicture: (bytes) => {
       const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
       return call("editInsertPicture", { bytes: payload }, [payload.buffer]);
+    },
+    // 그림 바꾸기. 고른 그림을 이 파일 바이트로 바꾼다.
+    editReplacePicture: (bytes) => {
+      const payload = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
+      return call("editReplacePicture", { bytes: payload }, [payload.buffer]);
     },
     // 그림 글머리표. 고른 그림 파일 바이트만 넘긴다.
     editPictureBullet: (bytes) => {

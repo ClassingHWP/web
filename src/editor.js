@@ -399,6 +399,11 @@ export function attachEditor(ctx) {
       if (blocked() || !bytes) return Promise.resolve(null);
       return queueEdit(() => session.editInsertPicture(bytes));
     },
+    // 그림 바꾸기. 고른 그림의 크기·효과를 두고 그림만 바꾸는 규칙은 코어가 정한다.
+    replacePicture(bytes) {
+      if (blocked() || !bytes) return Promise.resolve(null);
+      return queueEdit(() => session.editReplacePicture(bytes));
+    },
     // 그림 글머리표. 고른 파일 바이트를 그대로 코어에 넘긴다.
     pictureBullet(bytes) {
       if (blocked() || !bytes) return Promise.resolve(null);
@@ -408,6 +413,14 @@ export function attachEditor(ctx) {
     insertTable(rows, cols, fields) {
       if (blocked()) return Promise.resolve(null);
       return queueEdit(() => session.editInsertTable(rows, cols, fields));
+    },
+    // 문서 암호. 5자 이상·지금 암호 확인은 코어가 정한다.
+    documentPassword(current, next, confirm) {
+      if (blocked()) return Promise.resolve(null);
+      return queueEdit(() => session.editDocumentPassword(current, next, confirm));
+    },
+    documentHasPassword() {
+      return session.documentHasPassword();
     },
     // 단축키 편집 명령(코어 keyBindings 의 command). 무엇을 할지는 코어가 캐럿 상태를 보고 정한다.
     shortcut(command) {

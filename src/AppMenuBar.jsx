@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownAZ,
   ALargeSmall,
@@ -40,7 +40,7 @@ import { applyStyle, FormatBar, useStyleNames } from "./FormatBar.jsx";
 import { useZoomState, ZoomDialog } from "./ZoomDialog.jsx";
 import { openBlockCalcDialog } from "./BlockCalcDialog.jsx";
 import { openProofMarkDialog } from "./ProofMarkDialog.jsx";
-import { bandTab, masterTab, noteTab, pictureTab, shapeTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
+import { bandTab, masterTab, MobilePanel, mobileObjectTab, mobileTableTab, mobileTabs, noteTab, pictureTab, shapeTab, RibbonFrame, ribbonMenuItems, ribbonTabs, tableTabs } from "./Ribbon.jsx";
 import { openTocDialog, updateToc } from "./TocDialog.jsx";
 import { FormatDialogs, openFormatDialog } from "./FormatDialogs.jsx";
 import { openTableDialog } from "./TableDialog.jsx";
@@ -52,7 +52,8 @@ import { openSortDialog } from "./TableSortDialog.jsx";
 import { runShortcut } from "./ui-actions.js";
 import { openDeleteMarksDialog } from "./DeleteMarksDialog.jsx";
 import { openHeaderFooterDialog } from "./HeaderFooterDialog.jsx";
-import { MobileFooter, MobileHeader, MobileMenuSheet } from "./MobileChrome.jsx";
+import { MobileFooter, MobileHeader, MobileMenuSheet, useKeyboard } from "./MobileChrome.jsx";
+import { setTopBar, topBarShown } from "./app-viewer.js";
 import { Toaster } from "./Toast.jsx";
 import { AboutDialog, openAbout } from "./AboutDialog.jsx";
 import { openPageDialog } from "./PageDialogs.jsx";
@@ -480,6 +481,8 @@ export function AppMenuBar() {
   const [openMenu, setOpenMenu] = useState("");
   const [ribbon, setRibbon] = useState(storedRibbon);
   const [sheet, setSheet] = useState(false);
+  const [panel, setPanel] = useState("");
+  const closePanel = useCallback(() => setPanel(""), []);
   const [overlayTop, setOverlayTop] = useState(36);
   // 머리말·꼬리말에 들어가면 그 탭을 고른다. 다른 탭을 고르면 그 탭이 보이고, 나오면 원래 탭으로 돌아간다.
   const band = useBand();
@@ -518,6 +521,20 @@ export function AppMenuBar() {
     return () => observer.disconnect();
   }, [shown, wide]);
 
+  // 휴대폰 위 막대는 문서 위에 떠 있다. 높이·메뉴 판·화면 자판을 코어에 알리면, 코어가 스크롤 방향을 보고
+  // 숨길지 정한다(chwp-top-bar). 맨 위에서는 코어가 막대 높이만큼 비워 첫 쪽이 가리지 않는다.
+  const keyboard = useKeyboard();
+  const [barShown, setBarShown] = useState(topBarShown);
+  useEffect(() => {
+    const onBar = (event) => setBarShown(event.detail?.shown !== false);
+    window.addEventListener("chwp-top-bar", onBar);
+    return () => window.removeEventListener("chwp-top-bar", onBar);
+  }, []);
+  useEffect(() => {
+    setTopBar(wide ? 0 : overlayTop, !!panel || sheet, keyboard.inset > 0);
+  }, [wide, overlayTop, panel, sheet, keyboard.inset]);
+  useEffect(() => () => setTopBar(0), []);
+
   function pickRibbon(label) {
     setOpenMenu("");
     const fromBand = (band > 0 && bandPicked) || (note > 0 && notePicked) || (inTable && tablePicked) ||
@@ -533,32 +550,41 @@ export function AppMenuBar() {
     });
   }
 
-  // 휴대폰은 리본을 접지 않는다. 접어 둔 상태로 들어오면 편집 탭을 보인다.
-  const mobileTab = shown || "편집";
+  // 휴대폰: 위 탭을 누르면 그 탭의 메뉴 판이 올라온다. 표 칸·개체·머리말·주석·바탕쪽 안이면 그 탭이 맨 앞에 생긴다.
+  const contextTabs = [
+    ...(master ? [masterTab] : []),
+    ...(band > 0 ? [bandTab] : []),
+    ...(note > 0 ? [noteTab] : []),
+    ...(inTable ? [mobileTableTab] : []),
+    ...(inPicture ? [mobileObjectTab] : []),
+  ];
+  const contextKey = contextTabs.join("|");
+  useEffect(() => {
+    if (panel && !mobileTabs.includes(panel) && !contextKey.split("|").includes(panel)) setPanel("");
+  }, [panel, contextKey]);
 
   if (!wide) {
     return (
       <>
-        <header ref={headerRef} className="toolbar-ui ui-chrome relative z-50 flex shrink-0 flex-col bg-white">
+        <header
+          ref={headerRef}
+          className="toolbar-ui ui-chrome fixed inset-x-0 top-0 z-50 flex flex-col bg-white transition-transform duration-200"
+          style={{ transform: barShown ? "none" : "translateY(-100%)" }}
+        >
           <MobileHeader
-            tab={mobileTab}
-            band={band}
-            note={note}
-            master={master}
-            table={inTable}
-            onTab={(label) => {
-              setMasterPicked(label === masterTab);
-              setBandPicked(label === bandTab);
-              setNotePicked(label === noteTab);
-              setTablePicked(tableTabs.includes(label) ? label : "");
-              if (label === masterTab || label === bandTab || label === noteTab || tableTabs.includes(label)) return;
-              setRibbon(label);
-              storeRibbon(label);
+            tabs={mobileTabs}
+            contextTabs={contextTabs}
+            labels={{ [bandTab]: band === 1 ? "머리말" : "꼬리말" }}
+            open={panel}
+            onTab={(label) => setPanel((now) => (now === label ? "" : label))}
+            onMenu={() => {
+              setPanel("");
+              setSheet(true);
             }}
-            onMenu={() => setSheet(true)}
           />
         </header>
-        <MobileFooter tab={mobileTab} />
+        <MobilePanel tab={panel} objectKind={objectKind} onClose={closePanel} top={overlayTop} />
+        <MobileFooter />
         <MobileMenuSheet open={sheet} onClose={() => setSheet(false)} />
         <Toaster />
         <FormatDialogs />

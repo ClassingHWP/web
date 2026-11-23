@@ -3,13 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>ClassingHWP</title>
+    <title>ClassingHWP — 브라우저에서 여는 한글(HWP·HWPX) 편집기</title>
+    <meta name="description" content="한컴오피스 한글 없이 .hwp, .hwpx 파일을 웹 브라우저에서 바로 열어 보고 고치고 HWP·HWPX·PDF 로 저장하는 무료 한글 문서 편집기입니다. 설치가 필요 없고 문서는 서버로 올라가지 않습니다." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="ClassingHWP" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="ClassingHWP — 브라우저에서 여는 한글(HWP·HWPX) 편집기" />
+    <meta property="og:description" content="한글 프로그램 없이 .hwp, .hwpx 파일을 웹 브라우저에서 열어 보고 고치고 저장합니다." />
+    <meta property="og:image" content="https://classinghwp.github.io/img/og.png" />
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- 앱이 뜨기 전에 보이는 글. 검색 로봇도 이 글을 읽는다. 앱(createRoot)이 뜨면 지워진다. -->
+    <div id="root">
+      <main style="max-width: 640px; margin: 15vh auto 0; padding: 0 16px; font-family: system-ui, sans-serif; color: #4a525e; line-height: 1.7; word-break: keep-all">
+        <h1 style="font-size: 22px; color: #15181d; margin: 0 0 8px">ClassingHWP — 한글(HWP·HWPX) 문서 편집기</h1>
+        <p style="margin: 0 0 8px">한컴오피스 한글 없이 .hwp, .hwpx 파일을 웹 브라우저에서 열어 보고, 고치고, HWP·HWPX·PDF 로 저장합니다. 문서 엔진이 WebAssembly 로 브라우저 안에서 돌아서 문서가 서버로 올라가지 않습니다.</p>
+        <p style="margin: 0"><a href="https://classinghwp.github.io/">ClassingHWP 소개</a> · <a href="https://github.com/ClassingHWP/web">GitHub</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

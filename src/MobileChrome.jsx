@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { FileDown, FilePlus, FolderOpen, Info, Menu, Printer, Save, SaveAll, X } from "lucide-react";
+import { FileDown, FilePlus, FolderOpen, Info, Menu, Printer, Redo2, Save, SaveAll, Undo2, X } from "lucide-react";
 import { openAbout } from "./AboutDialog.jsx";
 import { FormatBar } from "./FormatBar.jsx";
-import { bandTab, masterTab, MobileRibbon, noteTab, ribbonTabs, tableTabs } from "./Ribbon.jsx";
-import { newDocument, notReady, openFile, printDocument, saveAs, savePdf, toggleRulers, useRulersShown } from "./ui-actions.js";
+import { newDocument, notReady, openFile, printDocument, saveAs, savePdf, selectionAction, toggleRulers, useRulersShown } from "./ui-actions.js";
 
 // 시안(MobileEdit·MobileMenu·MobileFormat)의 휴대폰 화면.
-// 위는 메뉴와 탭 칩 한 줄, 아래는 고른 탭의 리본 한 장 또는 키보드 위 서식 막대다.
+// 위는 메뉴·탭 칩·되돌리기 한 줄이고, 탭을 누르면 그 탭의 메뉴 판이 올라온다. 키보드가 뜨면 그 위에 서식 막대다.
 
 // 키보드가 떠 있는가와 그 높이. 편집 입력 칸이나 서식 막대에 손가락 입력 포커스가 있으면 떠 있다고 본다.
 // 실제 높이는 visualViewport 가 줄어든 만큼이다.
-function useKeyboard() {
+export function useKeyboard() {
   const [keyboard, setKeyboard] = useState({ open: false, inset: 0 });
   useEffect(() => {
     const coarse = window.matchMedia("(pointer: coarse)");
@@ -55,62 +54,58 @@ function useKeyboard() {
   return keyboard;
 }
 
-// 위 막대. 메뉴 단추와 탭 칩이 한 줄이다(문서 이름은 나중에 노치 쪽에 둔다).
-// 머리말·꼬리말·각주·미주를 고치는 동안은 맨 앞에 그 칩이 생긴다.
-export function MobileHeader({ tab, band = 0, note = 0, master = false, table = false, onTab, onMenu }) {
-  const tabs = [...(master ? [masterTab] : []), ...(band > 0 ? [bandTab] : []), ...(note > 0 ? [noteTab] : []), ...(table ? tableTabs : []), ...ribbonTabs];
+// 위 막대. 메뉴 단추, 탭 칩, 되돌리기·다시 실행이 한 줄이다. 탭을 누르면 그 탭의 메뉴 판이 올라온다(MobilePanel).
+// 표 칸·개체·머리말·주석·바탕쪽 안이면 그 탭이 맨 앞에 파란색으로 생긴다.
+export function MobileHeader({ tabs, contextTabs = [], labels = {}, open, onTab, onMenu }) {
   return (
-    <div className="flex h-[60px] items-center gap-[2px] border-b border-[#e5e5e5] pr-[6px] pl-1">
-      <button type="button" className="ui-ghost flex size-12 flex-none items-center justify-center rounded-[10px]" aria-label="메뉴" onClick={onMenu}>
-        <Menu className="size-6" />
+    <div className="flex h-12 items-center gap-0 border-b border-[#e5e5e5] bg-white px-[2px]">
+      <button type="button" className="ui-ghost flex size-9 flex-none items-center justify-center rounded-[10px]" aria-label="메뉴" onClick={onMenu}>
+        <Menu className="size-[22px]" />
       </button>
-      {/* 표·머리말 탭이 붙어 넘치면 가로로 민다. 탭은 줄지 않는다 */}
-      <div role="tablist" aria-label="메뉴 탭" className="flex min-w-0 flex-1 gap-[2px] overflow-x-auto [scrollbar-width:none]">
-        {tabs.map((name) => {
-          const isBand = name === masterTab || name === bandTab || name === noteTab || tableTabs.includes(name);
-          const picked = name === tab;
+      <div role="tablist" aria-label="메뉴 탭" className="flex min-w-0 flex-1 gap-0 overflow-x-auto [scrollbar-width:none] [&>:first-child]:ms-auto [&>:last-child]:me-auto">
+        {[...contextTabs, ...tabs].map((name) => {
+          const context = contextTabs.includes(name);
+          const picked = name === open;
           const look = picked
-            ? isBand ? "bg-[#1d4ed8] font-medium text-white" : "bg-[#171717] font-medium text-white"
-            : isBand ? "text-[#1d4ed8]" : "text-[#404040]";
+            ? context ? "bg-[#1d4ed8] font-medium text-white" : "bg-[#171717] font-medium text-white"
+            : context ? "text-[#1d4ed8]" : "text-[#404040]";
           return (
             <button
               key={name}
               type="button"
               role="tab"
               aria-selected={picked}
-              aria-label={name === bandTab ? `${band === 1 ? "머리말" : "꼬리말"} 편집` : tableTabs.includes(name) ? name : undefined}
-              className={`h-11 rounded-[22px] p-0 whitespace-nowrap ${isBand ? "flex-none px-[10px]" : "min-w-[2.6em] flex-1 shrink-0"} ${look}`}
+              className={`h-[34px] max-w-[88px] flex-1 shrink-0 rounded-[17px] px-[6px] text-[15px] whitespace-nowrap ${look}`}
               onClick={() => onTab(name)}
             >
-              {/* 좁은 화면이라 표 탭은 "표" 를 뗀다 */}
-              {name === bandTab ? (band === 1 ? "머리말" : "꼬리말") : tableTabs.includes(name) ? name.replace("표 ", "") : name}
+              {labels[name] || name}
             </button>
           );
         })}
       </div>
+      <button type="button" aria-label="되돌리기" className="ui-ghost flex size-9 flex-none items-center justify-center rounded-[10px]" onClick={() => selectionAction("undo")}>
+        <Undo2 className="size-5" />
+      </button>
+      <button type="button" aria-label="다시 실행" className="ui-ghost flex size-9 flex-none items-center justify-center rounded-[10px]" onClick={() => selectionAction("redo")}>
+        <Redo2 className="size-5" />
+      </button>
     </div>
   );
 }
 
-// 화면 아래. 키보드가 떠 있으면 그 바로 위에 서식 막대, 아니면 고른 탭의 리본 한 장이다.
-export function MobileFooter({ tab }) {
+// 화면 아래. 키보드가 떠 있으면 그 바로 위에 서식 막대를 둔다. 아니면 아래 띠 없이 문서를 넓게 쓴다.
+export function MobileFooter() {
   const keyboard = useKeyboard();
-  if (keyboard.open) {
-    return (
-      <div
-        data-mobile-format=""
-        data-toast-floor=""
-        className="toolbar-ui fixed inset-x-0 z-40 border-t border-[#e5e5e5] bg-white p-2"
-        style={{ bottom: keyboard.inset }}
-      >
-        <FormatBar layout="mobile" />
-      </div>
-    );
-  }
+  if (!keyboard.open) return null;
   return (
-    <footer data-toast-floor="" className="toolbar-ui ui-chrome shrink-0" style={{ order: 1 }}>
-      <MobileRibbon tab={tab} onUse={() => {}} />
-    </footer>
+    <div
+      data-mobile-format=""
+      data-toast-floor=""
+      className="toolbar-ui fixed inset-x-0 z-40 border-t border-[#e5e5e5] bg-white p-2"
+      style={{ bottom: keyboard.inset }}
+    >
+      <FormatBar layout="mobile" />
+    </div>
   );
 }
 

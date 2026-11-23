@@ -46,7 +46,7 @@ export function SelectionMenu() {
   const actions = menu.readOnly ? viewActions : editActions;
   // 마커는 블록 아래에 달려 있으니 메뉴는 마커 아래에 띄워 블록 글자를 가리지 않는다.
   // 화면 아래가 모자라면 위로 올리고, 좌우는 화면 밖으로 나가지 않게 16px 안쪽에 둔다.
-  const width = actions.length * 76;
+  const width = actions.length * 84;
   const height = 48;
   const left = Math.max(16, Math.min(menu.x - width / 2, window.innerWidth - width - 16));
   const below = menu.y + 24;
@@ -65,7 +65,7 @@ export function SelectionMenu() {
           key={item.action}
           type="button"
           role="menuitem"
-          className={`ui-ghost h-12 min-w-[76px] px-3 text-center active:bg-[#f5f5f5] ${index > 0 ? "border-l border-[#e5e5e5]" : ""} ${item.action === "delete" ? "text-[#c42b1c]" : ""}`}
+          className={`ui-ghost h-12 min-w-[84px] px-3 text-center text-[15px] whitespace-nowrap active:bg-[#f5f5f5] ${index > 0 ? "border-l border-[#e5e5e5]" : ""} ${item.action === "delete" ? "text-[#c42b1c]" : ""}`}
           // 클립보드 쓰기·읽기는 사용자 탭 안에서만 된다. 그래서 pointerdown 이 아니라 click 에서 넘긴다.
           onClick={() => {
             window.dispatchEvent(new CustomEvent("chwp-selection-action", { detail: { action: item.action } }));

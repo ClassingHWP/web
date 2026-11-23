@@ -22,6 +22,8 @@ import { RowColDialog, openRowColDialog } from "./RowColDialog.jsx";
 import { CellBorderFillDialog } from "./CellBorderFillDialog.jsx";
 import { ObjectPropertiesDialog } from "./ObjectPropertiesDialog.jsx";
 import { HeadingShapeDialog, openHeadingShapeDialog } from "./HeadingShapeDialog.jsx";
+import { DropCapDialog } from "./DropCapDialog.jsx";
+import { PasswordDialog } from "./PasswordDialog.jsx";
 import { PageControlDialog } from "./PageDialogs.jsx";
 import { SymbolDialog } from "./SymbolDialog.jsx";
 import { HyperlinkDialog, openHyperlinkDialog } from "./HyperlinkDialog.jsx";
@@ -1214,6 +1216,8 @@ export function FormatDialogs() {
       <CellBorderFillDialog />
       <ObjectPropertiesDialog />
       <HeadingShapeDialog />
+      <DropCapDialog />
+      <PasswordDialog />
       <PageControlDialog />
       <SymbolDialog />
       <HyperlinkDialog />

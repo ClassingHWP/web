@@ -104,6 +104,7 @@ export function createViewer(host, options = {}) {
     rulers: null,
     guides: null,
     editButton: false,
+    topBarShown: true,
   };
   const infoKey = {
     status: "status", viewport: "viewport", zoom: "zoom", docstate: "docState", cursorstyle: "cursorStyle",
@@ -980,6 +981,8 @@ export function createViewer(host, options = {}) {
   const presses = new Map();
   // 코어가 입력 답마다 알려 준다. 첫 답 전에는 코어 기본값과 같은 8 장치 픽셀이다.
   let tapSlop = 8;
+  // 보기 모드에서 다음 누르기가 편집으로 들어갈 수 있는 자리·시각(코어 답, 화면 장치 픽셀·포인터 시계).
+  let editTap = { until: 0, x: 0, y: 0, reach: 0 };
   const pointerPending = new Map();
   let pointerFlush = 0;
   let gesturePending = null;
@@ -1045,7 +1048,18 @@ export function createViewer(host, options = {}) {
     }
     syncViewportInfo(hintPage);
   }
+  // 문서 위에 뜬 도구줄을 보일지(코어가 스크롤 방향으로 정한다). 입력 답과 프레임 알림 둘 다에 온다.
+  function takeTopBar(camera) {
+    if (typeof camera?.topBarShown !== "boolean" || camera.topBarShown === info.topBarShown) return;
+    info.topBarShown = camera.topBarShown;
+    emit("topbar", { shown: info.topBarShown });
+  }
+  // 도구줄 높이(CSS 픽셀, 0 이면 없음), 메뉴 판이 열려 붙들어 둠, 화면 자판이 떠 있음을 코어에 알린다.
+  function setTopBar(height, pinned = false, keyboard = false) {
+    return sendInput({ type: "topBar", cssH: Math.max(0, Math.round(Number(height) || 0)), on: !!pinned, keyboard: !!keyboard });
+  }
   function applyShellCamera(camera, fromFrame = false) {
+    takeTopBar(camera);
     if (!camera) return;
     takeZoomLabel(camera);
     const prevPercent = screenPercent;
@@ -1108,6 +1122,28 @@ export function createViewer(host, options = {}) {
   }
   shellCameraHook = (camera) => applyShellCamera(camera, true);
 
+  // 보기·편집 모드는 셸이 정해 보내거나(setReadOnly), 코어가 입력(보기 모드의 두 번 누르기)으로 바꾼다.
+  // 코어가 바꾼 것만 받는다. 셸이 보낸 값보다 먼저 떠난 답이 셸 값을 되돌리지 않게 한다.
+  function takeMode(camera) {
+    if (!camera || typeof camera.mode !== "string") return;
+    editTap = {
+      until: Number(camera.editTapUntil) || 0,
+      x: Number(camera.editTapX) || 0,
+      y: Number(camera.editTapY) || 0,
+      reach: Number(camera.editTapReach) || 0,
+    };
+    if (!camera.modeByInput) return;
+    // 손가락 탭이면 셸이 이미 편집으로 두고 초점을 줬다(endPointer). 알림은 그래도 낸다.
+    readOnly = camera.mode === "view";
+    if (readOnly) editor.blurInput();
+    else editor.focusInput();
+    emit("mode", { mode: camera.mode, byInput: true });
+  }
+  // 이 누르기가 코어가 알려 준 편집 들어가기 자리·시각 안인지. 판단은 코어가 했고 여기서는 그 값과 맞춰 보기만 한다.
+  function onEditTap(point, time) {
+    return readOnly && editTap.until > 0 && time <= editTap.until &&
+      Math.hypot(point.x - editTap.x, point.y - editTap.y) <= editTap.reach;
+  }
   function adoptCamera(camera) {
     takeRulers(camera);
     if (typeof camera?.editButton === "boolean" && camera.editButton !== info.editButton) {
@@ -1116,6 +1152,7 @@ export function createViewer(host, options = {}) {
     }
     takeZoomLabel(camera);
     if (Number(camera?.tapSlop) > 0) tapSlop = Number(camera.tapSlop);
+    takeMode(camera);
     if (camera?.select) applyPointerResult(camera, (camera.selectPhase | 0) === 1);
     applyShellCamera(camera, false);
   }
@@ -1164,8 +1201,7 @@ export function createViewer(host, options = {}) {
     if (phase !== 2) {
       if (presses.size === 0) gestureActive = false;
       flushPointer();
-      void sendInput(payload);
-      return;
+      return sendInput(payload);
     }
     pointerPending.set(payload.id, payload);
     schedulePointerFlush();
@@ -1209,6 +1245,9 @@ export function createViewer(host, options = {}) {
     } catch {
       // 캡처가 없어도 이동 이벤트는 그릇으로 온다.
     }
+    if (touchOrPen) {
+      presses.get(event.pointerId).editTap = onEditTap(contactPoint(event, true), event.timeStamp || performance.now());
+    }
     sendPointer(event, 1, event.button);
   }, true);
   root.addEventListener("contextmenu", (event) => event.preventDefault(), true);
@@ -1242,7 +1281,18 @@ export function createViewer(host, options = {}) {
     lastPressClient.x = event.clientX;
     lastPressClient.y = event.clientY;
     if (press.touch && event.type === "pointerup" && !press.moved && presses.size === 0) touchTapPending = true;
-    sendPointer(event, event.type === "pointercancel" ? 4 : 3, press.button);
+    // 보기 모드의 두 번째 탭은 편집으로 들어간다(코어가 정한다). 화면 자판은 지금 준 초점에만 뜨므로
+    // 답을 기다리지 않고 편집으로 두고 초점을 준다. 답이 보기 모드면 거둔다.
+    const editGuess = press.editTap && touchTapPending;
+    if (editGuess) readOnly = false;
+    const sent = sendPointer(event, event.type === "pointercancel" ? 4 : 3, press.button);
+    if (editGuess) {
+      void sent?.then((camera) => {
+        if (camera?.mode === "edit") return;
+        readOnly = true;
+        editor.blurInput();
+      });
+    }
     // 오른쪽 단추를 떼면 상황 메뉴. 누름·뗌은 코어가 받아 캐럿·고르기를 정했고, 갈래도 코어가 정한다.
     if (press.button === 2 && event.type === "pointerup" && !readOnly) {
       const at = { x: event.clientX, y: event.clientY };
@@ -1583,7 +1633,7 @@ export function createViewer(host, options = {}) {
     // 보기 전용이면 눈금자를 숨기는 일은 코어가 한다. 켠 값은 저장해 둔 값을 넘긴다.
     const saved = savedRulers();
     if (saved !== null) void sendInput({ type: "rulers", on: saved });
-    void sendInput({ type: "readOnly", on: readOnly });
+    void sendInput({ type: "mode", mode: readOnly ? "view" : "edit" });
     if (readOnly) editor.blurInput();
   }
 
@@ -1627,6 +1677,7 @@ export function createViewer(host, options = {}) {
     save,
     exportPdf,
     setReadOnly,
+    setTopBar,
     // 넣은 보기 명령. zoom("150" | "width" | "in"), page(3 | "next"), view("two" | "grid", cols, rows), showEditButton(true)
     embed,
     zoom: (value) => embed("zoom", value),
@@ -1669,6 +1720,9 @@ export function createViewer(host, options = {}) {
     applyPageSetup: editor.applyPageSetup,
     drawShape: editor.drawShape,
     insertPicture: editor.insertPicture,
+    replacePicture: editor.replacePicture,
+    documentPassword: editor.documentPassword,
+    documentHasPassword: editor.documentHasPassword,
     pictureBullet: editor.pictureBullet,
     insertTable: editor.insertTable,
     tableEdit: editor.tableEdit,

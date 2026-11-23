@@ -575,6 +575,13 @@ self.onmessage = async (event) => {
           tapSlop: Number(camera.tapSlop) || 0,
           rulersWanted: !!camera.rulersWanted,
           editButton: !!camera.editButton,
+          mode: camera.mode === "view" ? "view" : "edit",
+          modeByInput: !!camera.modeByInput,
+          editTapUntil: Number(camera.editTapUntil) || 0,
+          editTapX: Number(camera.editTapX) || 0,
+          editTapY: Number(camera.editTapY) || 0,
+          editTapReach: Number(camera.editTapReach) || 0,
+          topBarShown: camera.topBarShown !== false,
           scrollChanged: !!camera.scrollChanged,
           zoomChanged: !!camera.zoomChanged,
           coasting: !!camera.coasting,
@@ -732,6 +739,14 @@ self.onmessage = async (event) => {
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
       return;
     }
+    if (msg.op === "editReplacePicture") {
+      await fontsReady;
+      const packed = chwp.editReplacePicture(msg.bytes);
+      msg.bytes = null;
+      const { result, transfers } = unpackEditResult(packed);
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
     if (msg.op === "editInsertPicture") {
       await fontsReady;
       const packed = chwp.editInsertPicture(msg.bytes);
@@ -745,6 +760,15 @@ self.onmessage = async (event) => {
       const packed = chwp.editInsertTable(msg.rows | 0, msg.cols | 0, msg.fields || {});
       const { result, transfers } = unpackEditResult(packed);
       self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "editDocumentPassword") {
+      const { result, transfers } = unpackEditResult(chwp.editDocumentPassword(String(msg.current), String(msg.next), String(msg.confirm)));
+      self.postMessage({ id: msg.id, ok: true, result }, transfers);
+      return;
+    }
+    if (msg.op === "documentHasPassword") {
+      self.postMessage({ id: msg.id, ok: true, result: !!chwp.documentHasPassword() });
       return;
     }
     if (msg.op === "editShortcut") {

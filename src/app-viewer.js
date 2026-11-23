@@ -10,6 +10,17 @@ let viewer = null;
 // 라우트(자식)의 effect 가 셸(부모)의 startAppViewer 보다 먼저 돌므로, 시작 전이면 값만 기억해 둔다.
 let readOnlyWanted = true;
 
+// 휴대폰 도구줄(문서 위에 뜬 막대). 숨길지는 코어가 정하고 chwp-top-bar 로 알린다.
+let topBarWanted = null;
+export function setTopBar(height, pinned = false, keyboard = false) {
+  topBarWanted = [height, pinned, keyboard];
+  viewer?.setTopBar(height, pinned, keyboard);
+}
+
+export function topBarShown() {
+  return viewer ? viewer.info.topBarShown !== false : true;
+}
+
 export function setReadOnly(on) {
   readOnlyWanted = !!on;
   viewer?.setReadOnly(readOnlyWanted);
@@ -126,6 +137,7 @@ export function startAppViewer(host) {
   if (params.get("debug") === "1") window.__chwpCacheUsage = () => viewer.cacheUsage();
   // iframe 으로 넣은 보기면 넣은 페이지와 배율·쪽·쪽 모양을 주고받는다.
   startEmbed(viewer);
+  if (topBarWanted) viewer.setTopBar(...topBarWanted);
 
   // 보기 알림 → 창 사건. 늦게 붙는 화면이 읽도록 마지막 값을 window.__chwp* 에도 둔다.
   const relay = (type, name, global) => {
@@ -148,6 +160,12 @@ export function startAppViewer(host) {
   relay("keybindings", "chwp-key-bindings", "__chwpKeyBindings");
   relay("zoomspec", "chwp-zoom-spec", "__chwpZoomSpec");
   relay("editbutton", "chwp-edit-button");
+  // 코어가 입력(보기 모드의 두 번 누르기)으로 모드를 바꿨다. 화면(도구줄·주소)이 따라간다.
+  viewer.addEventListener("mode", (event) => {
+    readOnlyWanted = event.detail?.mode === "view";
+  });
+  relay("mode", "chwp-mode");
+  relay("topbar", "chwp-top-bar");
   relay("fontswapask", "chwp-font-swap-ask");
   relay("selectionmenu", "chwp-selection-menu");
   relay("contextmenu", "chwp-context-menu");
@@ -184,6 +202,9 @@ export function startAppViewer(host) {
   window.__chwpApplyPageSetup = viewer.applyPageSetup;
   window.__chwpDrawShape = viewer.drawShape;
   window.__chwpInsertPicture = viewer.insertPicture;
+  window.__chwpReplacePicture = viewer.replacePicture;
+  window.__chwpDocumentPassword = viewer.documentPassword;
+  window.__chwpDocumentHasPassword = viewer.documentHasPassword;
   window.__chwpPictureBullet = viewer.pictureBullet;
   window.__chwpInsertTable = viewer.insertTable;
   window.__chwpTableEdit = viewer.tableEdit;

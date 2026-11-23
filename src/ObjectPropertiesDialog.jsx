@@ -19,6 +19,7 @@ const vertRels = [["PAPER", "종이"], ["PAGE", "쪽"], ["PARA", "문단"]];
 const effects = [[0, "원래 그림"], [1, "회색조"], [2, "흑백"]];
 const shapeLineTypes = [["SOLID", "실선"], ["DASH", "파선"], ["DOT", "점선"], ["DASH_DOT", "일점쇄선"], ["DASH_DOT_DOT", "이점쇄선"],
   ["LONG_DASH", "긴 파선"], ["DOUBLE_SLIM", "이중 실선"], ["NONE", "선 없음"]];
+const textMargins = [["textMarginLeft", "왼쪽"], ["textMarginRight", "오른쪽"], ["textMarginTop", "위쪽"], ["textMarginBottom", "아래쪽"]];
 const margins = [["marginLeft", "왼쪽"], ["marginRight", "오른쪽"], ["marginTop", "위쪽"], ["marginBottom", "아래쪽"]];
 
 function Num({ label, value, onChange, unit = "mm", min, max, step = "0.01" }) {
@@ -114,6 +115,27 @@ export function ObjectPropertiesDialog() {
               <Num key={key} label={label} value={toMm(v[key] || 0)} onChange={(mm) => set({ [key]: Math.max(0, toHu(mm)) })} min="0" />
             ))}
           </fieldset>
+          {v.textMarginLeft !== undefined && (
+            // 글상자(한글 개체 속성 [글상자]): 안쪽 여백, 세로 정렬, 글자 방향.
+            <fieldset className="flex flex-col gap-1.5 rounded-md border border-[#e5e5e5] p-2">
+              <legend className="px-1">글상자</legend>
+              {textMargins.map(([key, label]) => (
+                <Num key={key} label={`안쪽 ${label}`} value={toMm(v[key] || 0)} onChange={(mm) => set({ [key]: Math.max(0, toHu(mm)) })} min="0" />
+              ))}
+              <label className="flex items-center justify-between gap-2">
+                <span>세로 정렬</span>
+                <select className="ui-box h-8 rounded-md px-2" value={v.textVertAlign || "TOP"} onChange={(event) => set({ textVertAlign: event.target.value })}>
+                  {[["TOP", "위"], ["CENTER", "가운데"], ["BOTTOM", "아래"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <span>글자 방향</span>
+                <select className="ui-box h-8 rounded-md px-2" value={Number(v.textDirection) || 0} onChange={(event) => set({ textDirection: Number(event.target.value) })}>
+                  {[[0, "가로쓰기"], [1, "세로쓰기(영문 눕힘)"], [2, "세로쓰기(영문 세움)"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+            </fieldset>
+          )}
           {v.kind === "shape" && (
             <fieldset className="flex flex-col gap-1.5 rounded-md border border-[#e5e5e5] p-2">
               <legend className="px-1">선·채우기</legend>

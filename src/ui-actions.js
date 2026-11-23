@@ -39,6 +39,23 @@ export function pickPicture() {
   input.click();
 }
 
+// 그림 바꾸기(한글 ChangePictureDlg). 파일을 고르면 그 바이트를 넘기고, 못 바꾸면 코어가 준 까닭을 알린다.
+export function pickReplacePicture() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/png,image/jpeg,image/gif,image/bmp,.png,.jpg,.jpeg,.gif,.bmp";
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (!file || typeof window.__chwpReplacePicture !== "function") return;
+    void file.arrayBuffer()
+      .then((buffer) => window.__chwpReplacePicture(new Uint8Array(buffer)))
+      .then((result) => {
+        if (result && !result.documentChanged && result.error) toast(result.error, "info", null, { key: "replacePicture" });
+      });
+  });
+  input.click();
+}
+
 export function saveAs() {
   window.dispatchEvent(new Event("chwp-save-as"));
 }
@@ -532,6 +549,16 @@ export function useTablePen() {
     return () => window.removeEventListener("chwp-table-pen", onPen);
   }, []);
   return pen;
+}
+
+// 표 그리기·표 지우개(한글 표 디자인 탭). 펜은 지금 고른 테두리 선으로 긋는다. 나누고 합치는 규칙은 코어가 정한다.
+export function tablePenTool() {
+  const { lineType, lineWidth, lineColor } = tablePenNow;
+  return runShortcut(`tablePen:${lineType || ""}:${lineWidth || 0}:${lineColor || ""}`);
+}
+
+export function tableEraserTool() {
+  return runShortcut("tableEraser");
 }
 
 // 셀 테두리 단추. 지금 고른 선으로 긋는다.

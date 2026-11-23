@@ -8,6 +8,7 @@ import { SelectionMenu } from "./SelectionMenu.jsx";
 import { ContextMenu } from "./ContextMenu.jsx";
 import { Button } from "@/components/ui/button";
 import { editButtonShown, setReadOnly, startAppViewer } from "./app-viewer.js";
+import { useWide } from "./ui-actions.js";
 import "./viewer.css";
 import "./app.css";
 
@@ -40,41 +41,75 @@ function DocumentShell() {
   );
 }
 
-// 보기 전용. 메뉴·서식 줄이 없다. 스크롤·배율·블록·복사는 그대로다.
-// 편집 버튼은 처음엔 숨기고, 넣은 페이지가 임베드 명령(주소 ?edit=1, postMessage edit)으로 켤 때만 보인다.
+// 보기·편집 모드. 처음 모드는 주소가 정한다(/viewer 는 보기, 나머지는 편집). 열린 뒤에는 코어가 모드를 들고 있고
+// (보기 모드에서 두 번 누르면 편집), 화면은 그 알림(chwp-mode)대로 도구줄을 그리고 주소를 따라 적는다.
+// 주소를 따라 적으므로 뒤로 가기는 보기로 돌아온다.
+function routeMode(pathname) {
+  return /\/viewer\/?$/.test(pathname) ? "view" : "edit";
+}
+
+function DocumentChrome() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const wanted = routeMode(location.pathname);
+  const [mode, setMode] = useState(wanted);
+
+  // 주소 → 코어(처음 열 때, 편집 단추, 뒤로 가기).
+  useEffect(() => {
+    setMode(wanted);
+    setReadOnly(wanted === "view");
+  }, [wanted]);
+
+  // 코어 → 화면·주소. ?file= 이 그대로 따라가므로 문서를 다시 읽지 않는다.
+  useEffect(() => {
+    const onMode = (event) => {
+      const next = event.detail?.mode === "view" ? "view" : "edit";
+      setMode(next);
+      if (next !== wanted) navigate({ pathname: next === "view" ? "/viewer" : "/editor", search: location.search });
+    };
+    window.addEventListener("chwp-mode", onMode);
+    return () => window.removeEventListener("chwp-mode", onMode);
+  }, [wanted, location.search, navigate]);
+
+  return mode === "view" ? <ViewChrome /> : <AppMenuBar />;
+}
+
+// 보기 모드. 메뉴·서식 줄이 없다. 스크롤·배율·블록·복사는 그대로다.
+// 편집 단추는 처음엔 숨기고, 넣은 페이지가 임베드 명령(주소 ?edit=1, postMessage edit)으로 켤 때만 보인다.
+// 휴대폰·태블릿 세로는 문서를 가리지 않게 오른쪽 아래 둥근 단추 하나다.
 function ViewChrome() {
   const location = useLocation();
   const navigate = useNavigate();
+  const wide = useWide();
   const [shown, setShown] = useState(editButtonShown);
 
   useEffect(() => {
-    setReadOnly(true);
     const onChange = (event) => setShown(!!event.detail?.shown);
     window.addEventListener("chwp-edit-button", onChange);
     return () => window.removeEventListener("chwp-edit-button", onChange);
   }, []);
 
   if (!shown) return null;
+  const edit = () => navigate({ pathname: "/editor", search: location.search });
+  if (!wide) {
+    return (
+      <Button
+        size="icon"
+        aria-label="편집"
+        title="편집 (문서를 두 번 눌러도 들어갑니다)"
+        className="fixed right-4 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-10 size-12 rounded-full shadow-lg"
+        onClick={edit}
+      >
+        <PencilLine className="size-5" />
+      </Button>
+    );
+  }
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="fixed top-3 right-3 z-10 shadow-sm"
-      // ?file= 이 그대로 따라가므로 문서를 다시 읽지 않는다. 뒤로 가기는 보기로 돌아온다.
-      onClick={() => navigate({ pathname: "/editor", search: location.search })}
-    >
+    <Button variant="outline" size="sm" className="fixed top-3 right-3 z-10 shadow-sm" onClick={edit}>
       <PencilLine />
       편집
     </Button>
   );
-}
-
-function EditChrome() {
-  useEffect(() => {
-    setReadOnly(false);
-  }, []);
-
-  return <AppMenuBar />;
 }
 
 // 개발 서버가 이 파일을 다시 실행해도(HMR) 같은 루트에 다시 그린다. 루트를 또 만들면 React 가 경고한다.
@@ -84,10 +119,8 @@ rootElement.__chwpRoot.render(
   <BrowserRouter basename={routerBase()}>
     <Routes>
       <Route element={<DocumentShell />}>
-        <Route path="viewer" element={<ViewChrome />} />
-        <Route path="editor" element={<EditChrome />} />
-        {/* /, /open(파일 핸들러) 등 나머지는 지금처럼 편집기 */}
-        <Route path="*" element={<EditChrome />} />
+        {/* /viewer 는 보기 모드로, /editor·/·/open(파일 핸들러) 등 나머지는 편집 모드로 연다 */}
+        <Route path="*" element={<DocumentChrome />} />
       </Route>
     </Routes>
   </BrowserRouter>,
